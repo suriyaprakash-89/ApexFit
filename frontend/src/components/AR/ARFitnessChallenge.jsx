@@ -7,6 +7,16 @@ import { checkWallSit, checkPlank, drawSkeleton } from "../../utils/poseUtils";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../store/authStore";
 
+const RotateDevicePrompt = () => (
+  <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center z-[100] p-4 text-white text-center landscape:hidden">
+    <svg className="w-24 h-24 mb-4 transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2zM5 11h14" />
+    </svg>
+    <h2 className="text-2xl font-bold">Please Rotate Your Device</h2>
+    <p className="mt-2 text-gray-300">For the best experience, please use landscape mode.</p>
+  </div>
+);
+
 const ARFitnessChallenge = () => {
   const { user } = useAuthStore();
   const [activeChallenge, setActiveChallenge] = useState(null);
@@ -82,8 +92,9 @@ const ARFitnessChallenge = () => {
     setFeedback("Starting camera...");
     try {
       await loadPoseDetector();
+      // --- FIX: Request a 16:9 widescreen video resolution ---
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480 },
+        video: { width: 1280, height: 720 },
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -171,17 +182,14 @@ const ARFitnessChallenge = () => {
     setLastSpokenFeedback("");
   };
 
-  // --- UPDATED: Function to save results using the new DB function ---
   const saveChallengeResults = async (challenge) => {
     if (!user) {
       console.error("User not found, cannot save points.");
       setFeedback("Could not save points. Please log in again.");
       return;
     }
-
     setFeedback("Saving your points...");
     speak("Saving your points.");
-
     const { error: rpcError } = await supabase.rpc(
       "award_ar_challenge_points",
       {
@@ -190,7 +198,6 @@ const ARFitnessChallenge = () => {
         challenge_name: challenge.name,
       }
     );
-
     if (rpcError) {
       console.error("Error updating user points:", rpcError);
       speak("There was an error saving your points.");
@@ -203,9 +210,7 @@ const ARFitnessChallenge = () => {
     const completionMessage = `Challenge Complete! You earned ${challenge.points} points!`;
     setFeedback(completionMessage);
     speak(completionMessage);
-
     await saveChallengeResults(challenge);
-
     setTimeout(stopChallenge, 4000);
   };
 
@@ -257,6 +262,9 @@ const ARFitnessChallenge = () => {
 
       {activeChallenge && (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-95 flex flex-col items-center justify-center z-50 animate-fade-in">
+          
+          <RotateDevicePrompt />
+
           <button
             onClick={stopChallenge}
             className="absolute top-4 right-4 text-white bg-red-600 rounded-full p-2 hover:bg-red-700 z-20"
@@ -307,10 +315,11 @@ const ARFitnessChallenge = () => {
                   muted
                   className="w-full h-full object-cover transform -scale-x-100"
                 />
+                {/* --- FIX: Update canvas dimensions to match video --- */}
                 <canvas
                   ref={canvasRef}
-                  width="640"
-                  height="480"
+                  width="1280"
+                  height="720"
                   className="absolute top-0 left-0 w-full h-full object-cover transform -scale-x-100"
                 />
               </div>
