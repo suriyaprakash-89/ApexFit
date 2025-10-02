@@ -3,6 +3,8 @@ import { useAuthStore } from "../../store/authStore";
 import { Brain, Send, Sparkles } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 
+const apiUrl = import.meta.env.VITE_API_URL;
+
 const AIHealthCoach = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -43,7 +45,7 @@ const AIHealthCoach = () => {
       }));
 
       // Call your Groq AI backend
-      const response = await fetch("http://localhost:3001/api/ai/ask", {
+      const response = await fetch(`${apiUrl}/api/ai/ask`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
