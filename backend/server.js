@@ -9,8 +9,6 @@ const HOST = "0.0.0.0";
 const allowedOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(",")
   : [];
-
-// ✅ Middleware
 app.use(
   cors({
     origin: allowedOrigins,
