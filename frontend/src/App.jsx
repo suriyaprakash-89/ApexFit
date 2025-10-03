@@ -1,10 +1,14 @@
 // frontend/src/App.jsx
 import React, { useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 
 import Navbar from "./components/Layout/Navbar";
-import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
@@ -20,6 +24,14 @@ import Settings from "./pages/Settings";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ThemeAwareToaster from "./components/UI/ThemeAwareToaster";
 
+// --- NEW IMPORTS FOR DASHBOARD ROUTING ---
+import DashboardLayout from "./components/Layout/DashboardLayout";
+import Overview from "./pages/Overview";
+import AICoach from "./pages/AICoach";
+import Challenges from "./pages/Challenges";
+import Insights from "./pages/Insights";
+import ARFitness from "./pages/ARFitness";
+
 function App() {
   const { user, loading } = useAuthStore();
   const { fetchNotifications, checkWaterReminder } = useNotificationStore();
@@ -27,7 +39,6 @@ function App() {
   useEffect(() => {
     if (user) {
       fetchNotifications();
-      // Check for water reminders every hour
       const interval = setInterval(checkWaterReminder, 3600000);
       return () => clearInterval(interval);
     }
@@ -50,14 +61,35 @@ function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+
+              {/* --- NEW NESTED DASHBOARD ROUTE --- */}
               <Route
-                path="/"
+                path="/dashboard"
                 element={
                   <ProtectedRoute>
-                    <Dashboard />
+                    <DashboardLayout />
                   </ProtectedRoute>
                 }
+              >
+                <Route path="overview" element={<Overview />} />
+                <Route path="ai-coach" element={<AICoach />} />
+                <Route path="challenges" element={<Challenges />} />
+                <Route path="insights" element={<Insights />} />
+                <Route path="ar-fitness" element={<ARFitness />} />
+                {/* Redirect from "/dashboard" to "/dashboard/overview" */}
+                <Route
+                  index
+                  element={<Navigate to="/dashboard/overview" replace />}
+                />
+              </Route>
+
+              {/* Redirect root path to the dashboard */}
+              <Route
+                path="/"
+                element={<Navigate to="/dashboard/overview" replace />}
               />
+
+              {/* Other existing top-level routes */}
               <Route
                 path="/profile"
                 element={
