@@ -1,4 +1,4 @@
-# Fitness Tracker - Samsung Health Clone
+# Fitness Tracker
 
 A full-stack fitness tracking application built with React, Node.js, and Supabase.
 
@@ -28,9 +28,3 @@ A full-stack fitness tracking application built with React, Node.js, and Supabas
 - npm or yarn
 - Supabase account
 
-### 1. Clone the repository
-
-```bash
-git clone <repository-url>
-cd fitness-tracker
-```
