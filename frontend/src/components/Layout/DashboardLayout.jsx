@@ -1,11 +1,16 @@
 // frontend/src/pages/DashboardLayout.jsx
 import React from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
 import { Activity, Brain, Trophy, BarChart3, Box, Plus } from "lucide-react";
 
 const DashboardLayout = () => {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
+
+  const handleLogActivityClick = () => {
+    navigate("/activities");
+  };
 
   const tabConfig = [
     { to: "/dashboard/overview", icon: Activity, label: "Overview" },
@@ -35,7 +40,10 @@ const DashboardLayout = () => {
               })}
             </p>
           </div>
-          <button className="mt-4 md:mt-0 flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl transition-colors shadow-md">
+          <button
+            onClick={handleLogActivityClick}
+            className="mt-4 md:mt-0 flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl transition-colors shadow-md"
+          >
             <Plus className="w-5 h-5" />
             <span>Log Activity</span>
           </button>

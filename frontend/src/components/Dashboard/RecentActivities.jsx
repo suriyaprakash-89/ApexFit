@@ -1,16 +1,7 @@
-// frontend/src/components/Dashboard/RecentActivities.jsx
 import React from "react";
+import { Link } from "react-router-dom";
 
 const RecentActivities = ({ activities }) => {
-  const mockActivities = [
-    { id: 1, type: "running", duration: 30, calories: 300, date: "2024-01-15" },
-    { id: 2, type: "walking", duration: 45, calories: 180, date: "2024-01-14" },
-    { id: 3, type: "cycling", duration: 60, calories: 450, date: "2024-01-13" },
-    { id: 4, type: "yoga", duration: 40, calories: 150, date: "2024-01-12" },
-  ];
-
-  const activityData = activities.length > 0 ? activities : mockActivities;
-
   const getActivityIcon = (type) => {
     switch (type) {
       case "running":
@@ -31,7 +22,12 @@ const RecentActivities = ({ activities }) => {
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+    const date = new Date(dateString);
+    // Add a time zone check to prevent date shifting issues
+    const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+    const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
+
+    return adjustedDate.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
       day: "numeric",
@@ -39,41 +35,55 @@ const RecentActivities = ({ activities }) => {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        Recent Activities
-      </h3>
-
-      <div className="space-y-3">
-        {activityData.map((activity) => (
-          <div
-            key={activity.id}
-            className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
-          >
-            <div className="flex items-center space-x-3">
-              <span className="text-2xl">{getActivityIcon(activity.type)}</span>
-              <div>
-                <p className="font-medium text-gray-900 dark:text-white capitalize">
-                  {activity.type}
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {activity.duration} min • {formatDate(activity.date)}
+    <div>
+      {activities && activities.length > 0 ? (
+        <div className="space-y-3">
+          {activities.map((activity) => (
+            <div
+              key={activity.id}
+              className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+            >
+              <div className="flex items-center space-x-3">
+                <span className="text-2xl">
+                  {getActivityIcon(activity.type)}
+                </span>
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white capitalize">
+                    {activity.type}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {activity.duration} min • {formatDate(activity.date)}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="font-semibold text-blue-600 dark:text-blue-400">
+                  {activity.calories} cal
                 </p>
               </div>
             </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-8">
+          <p className="text-gray-500 dark:text-gray-400">
+            No activities logged yet.
+          </p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+            Click 'Log Activity' to get started!
+          </p>
+        </div>
+      )}
 
-            <div className="text-right">
-              <p className="font-semibold text-blue-600 dark:text-blue-400">
-                {activity.calories} cal
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <button className="w-full mt-4 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 py-2 px-4 rounded-md transition-colors">
-        View All Activities
-      </button>
+      {/* --- MODIFICATION: "View All" is now a Link --- */}
+      {activities && activities.length > 0 && (
+        <Link
+          to="/activities"
+          className="block w-full text-center mt-4 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 py-2 px-4 rounded-md transition-colors font-semibold"
+        >
+          View All Activities
+        </Link>
+      )}
     </div>
   );
 };

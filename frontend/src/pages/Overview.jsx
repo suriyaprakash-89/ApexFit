@@ -1,4 +1,3 @@
-// frontend/src/pages/Overview.jsx
 import React, { useEffect, useState } from "react";
 import { useActivityStore } from "../store/activityStore";
 import ActivityChart from "../components/Dashboard/ActivityChart";
@@ -170,16 +169,22 @@ const Overview = () => {
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
-              Progress Overview
-            </h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Goals Progress
+              </h2>
+              <Target className="w-5 h-5 text-indigo-500" />
+            </div>
             <ProgressOverview goals={goals} />
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
-              Recent Activities
-            </h2>
-            <RecentActivities activities={activities} />
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Recent Activities
+              </h2>
+            </div>
+            {/* --- MODIFICATION: Pass only the first 3 activities --- */}
+            <RecentActivities activities={activities.slice(0, 3)} />
           </div>
         </div>
       </div>
