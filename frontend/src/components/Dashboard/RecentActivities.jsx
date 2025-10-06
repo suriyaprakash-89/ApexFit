@@ -21,16 +21,17 @@ const RecentActivities = ({ activities }) => {
     }
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    // Add a time zone check to prevent date shifting issues
-    const userTimezoneOffset = date.getTimezoneOffset() * 60000;
-    const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
+  // --- NEW FUNCTION TO FORMAT DATE AND TIME ---
+  const formatDateTime = (timestampString) => {
+    if (!timestampString) return "Just now"; // Fallback for new activities
 
-    return adjustedDate.toLocaleDateString("en-US", {
+    return new Date(timestampString).toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
       day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      hour12: true, // Use AM/PM
     });
   };
 
@@ -52,7 +53,9 @@ const RecentActivities = ({ activities }) => {
                     {activity.type}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {activity.duration} min • {formatDate(activity.date)}
+                    {/* --- FIX: Use the new function and the correct field --- */}
+                    {activity.duration} min •{" "}
+                    {formatDateTime(activity.created_at)}
                   </p>
                 </div>
               </div>
@@ -75,7 +78,6 @@ const RecentActivities = ({ activities }) => {
         </div>
       )}
 
-      {/* --- MODIFICATION: "View All" is now a Link --- */}
       {activities && activities.length > 0 && (
         <Link
           to="/activities"

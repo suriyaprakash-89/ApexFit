@@ -27,7 +27,7 @@ export const useActivityStore = create((set, get) => ({
             .from("activities")
             .select("*")
             .eq("user_id", user.id)
-            .order("date", { ascending: false })
+            .order("created_at", { ascending: false })
             .limit(10),
           supabase
             .from("steps")
