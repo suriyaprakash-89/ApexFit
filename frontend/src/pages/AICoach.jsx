@@ -6,7 +6,7 @@ import FitnessDNAReport from "../components/AI/FitnessDNAReport";
 const AICoach = () => (
   <div className="space-y-6">
     <AIHealthCoach />
-    <FitnessDNAReport />
+    {/* <FitnessDNAReport /> */}
   </div>
 );
 
