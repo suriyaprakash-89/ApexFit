@@ -1,49 +1,53 @@
-// frontend/src/components/Dashboard/WaterIntakeTracker.jsx
 import React, { useEffect, useState } from "react";
 import { useActivityStore } from "../../store/activityStore";
 import toast from "react-hot-toast";
 
 const WaterIntakeTracker = () => {
   const [todayWater, setTodayWater] = useState(0);
-  const { water, addWaterIntake, goals } = useActivityStore();
+  // --- MODIFICATION: Import the new setWaterIntake function ---
+  const { water, addWaterIntake, setWaterIntake, goals } = useActivityStore();
 
-  // Conversion factor: 1 glass = 0.25 liters (standard glass size)
   const GLASS_TO_LITER = 0.25;
 
-  // Get today's water intake from the store
   useEffect(() => {
     const today = new Date().toISOString().split("T")[0];
     const todayEntry = water.find((entry) => entry.date === today);
     setTodayWater(todayEntry?.amount || 0);
   }, [water]);
 
-  // Get water goal from database
   const getWaterGoal = () => {
     const waterGoal = goals.find((g) => g.goal_type === "water");
-    return waterGoal?.target_value || 15; // Default to 15 glasses (3.75L)
+    return waterGoal?.target_value || 15;
   };
 
   const waterGoalGlasses = getWaterGoal();
-  const waterGoalLiters = (waterGoalGlasses * GLASS_TO_LITER).toFixed(1);
-
-  const todayWaterLiters = (todayWater * GLASS_TO_LITER).toFixed(1);
 
   const handleAddWater = async (glassesToAdd) => {
     try {
-      // Check if adding these glasses would exceed the maximum of 20
       if (todayWater + glassesToAdd > 20) {
         toast.error("Maximum water intake is 20 glasses per day");
         return;
       }
-
       await addWaterIntake(glassesToAdd);
       toast.success(
-        `Added ${glassesToAdd} glass${glassesToAdd > 1 ? "es" : ""} (${(
-          glassesToAdd * GLASS_TO_LITER
-        ).toFixed(1)}L) of water!`
+        `Added ${glassesToAdd} glass${glassesToAdd > 1 ? "es" : ""} of water!`
       );
     } catch (error) {
       toast.error("Failed to track water intake");
+    }
+  };
+
+  // --- NEW: Handler for setting water amount directly ---
+  const handleSetWater = async (glasses) => {
+    try {
+      if (glasses > 20) {
+        toast.error("Maximum water intake is 20 glasses per day");
+        return;
+      }
+      await setWaterIntake(glasses);
+      toast.success(`Water intake set to ${glasses} glasses!`);
+    } catch (error) {
+      toast.error("Failed to update water intake");
     }
   };
 
@@ -52,7 +56,6 @@ const WaterIntakeTracker = () => {
     100
   );
 
-  // Get hydration status message
   const getHydrationStatus = () => {
     if (percentage >= 100) return "Excellent hydration! 💪";
     if (percentage >= 75) return "Great job! Almost there! 👍";
@@ -61,7 +64,6 @@ const WaterIntakeTracker = () => {
     return "Time to hydrate! Your body needs water! ⚡";
   };
 
-  // Create water glasses array based on the goal, max 20
   const waterGlasses = Array.from(
     { length: Math.min(waterGoalGlasses, 20) },
     (_, i) => i + 1
@@ -78,17 +80,15 @@ const WaterIntakeTracker = () => {
         </div>
       </div>
 
-      {/* Main water intake display */}
       <div className="text-center mb-2">
         <div className="text-xl font-bold text-blue-600 dark:text-blue-400 mb-1">
-          {todayWaterLiters}L
+          {(todayWater * GLASS_TO_LITER).toFixed(1)}L
         </div>
         <p className="text-xs text-gray-600 dark:text-gray-400">
           {todayWater} glass{todayWater !== 1 ? "es" : ""} today
         </p>
       </div>
 
-      {/* Goal progress - Replaced circle with compact bar */}
       <div className="mb-2">
         <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
           <span>Goal Progress</span>
@@ -107,7 +107,6 @@ const WaterIntakeTracker = () => {
         </p>
       </div>
 
-      {/* Water glasses grid */}
       <div className="mb-2">
         <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 text-center">
           Track your glasses
@@ -116,7 +115,8 @@ const WaterIntakeTracker = () => {
           {waterGlasses.map((glass) => (
             <button
               key={glass}
-              onClick={() => handleAddWater(1)}
+              // --- MODIFICATION: Call the new handleSetWater function ---
+              onClick={() => handleSetWater(glass)}
               className={`w-5 h-5 rounded-full flex items-center justify-center text-xs transition-all duration-200 ${
                 todayWater >= glass
                   ? "bg-blue-500 text-white shadow-md transform scale-105"
@@ -129,25 +129,21 @@ const WaterIntakeTracker = () => {
         </div>
       </div>
 
-      {/* Quick actions */}
       <div className="grid grid-cols-2 gap-2 mb-2">
         <button
           onClick={() => handleAddWater(1)}
           className="bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded text-xs font-medium transition-colors flex items-center justify-center"
         >
-          <span className="mr-1">+1</span>
-          <span>Glass</span>
+          <span className="mr-1">+1</span> Glass
         </button>
         <button
           onClick={() => handleAddWater(2)}
           className="bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded text-xs font-medium transition-colors flex items-center justify-center"
         >
-          <span className="mr-1">+2</span>
-          <span>Glasses</span>
+          <span className="mr-1">+2</span> Glasses
         </button>
       </div>
 
-      {/* Hydration tips */}
       <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded text-xs mt-auto">
         <div className="flex items-start">
           <span className="text-blue-500 mr-1 text-xs">💡</span>
@@ -166,7 +162,6 @@ const WaterIntakeTracker = () => {
         </div>
       </div>
 
-      {/* Daily recommendation */}
       <div className="mt-1 text-center">
         <p className="text-xs text-gray-500 dark:text-gray-400">
           Recommended: 2-4L daily

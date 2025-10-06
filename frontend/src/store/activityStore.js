@@ -233,6 +233,26 @@ export const useActivityStore = create((set, get) => ({
     }
   },
 
+  setWaterIntake: async (glasses) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+      const today = new Date().toISOString().split("T")[0];
+
+      const { data, error } = await supabase
+        .from("water")
+        .upsert({ amount: glasses, date: today, user_id: user.id }, { onConflict: "user_id,date" })
+        .select();
+        
+      if (error) throw error;
+      set((state) => ({ water: [data[0], ...state.water.filter((w) => w.date !== today)] }));
+      return data[0];
+    } catch (error) {
+      console.error("Error setting water intake:", error);
+      throw error;
+    }
+  },
+
   setupRealtime: () => {
     const user = supabase.auth.getUser();
     if (!user) return;
