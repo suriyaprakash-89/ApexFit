@@ -1,4 +1,3 @@
-// frontend/src/store/activityStore.js
 import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 
@@ -79,17 +78,14 @@ export const useActivityStore = create((set, get) => ({
 
       switch (period) {
         case "day":
-          // Get data for today only
           startDate = new Date();
           startDate.setHours(0, 0, 0, 0);
           break;
         case "week":
-          // Get data for the last 7 days
           startDate = new Date();
           startDate.setDate(startDate.getDate() - 7);
           break;
         case "month":
-          // Get data for the last 30 days
           startDate = new Date();
           startDate.setDate(startDate.getDate() - 30);
           break;
@@ -100,7 +96,6 @@ export const useActivityStore = create((set, get) => ({
 
       const startDateString = startDate.toISOString().split("T")[0];
 
-      // Fetch steps and activities for the selected period
       const [stepsRes, activitiesRes] = await Promise.all([
         supabase
           .from("steps")
@@ -130,32 +125,70 @@ export const useActivityStore = create((set, get) => ({
     }
   },
 
-  addActivity: async (activityData) => {
+  // --- NEW UNIFIED FUNCTION FOR LOGGING ACTIVITIES AND UPDATING GOALS ---
+  logActivityAndUpdateGoals: async (activityData) => {
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
-      const { data, error } = await supabase
+      // Step 1: Insert the new activity (e.g., a 'run' with calories, or a 'walk' with steps)
+      const { data: newActivity, error: insertError } = await supabase
         .from("activities")
         .insert([{ ...activityData, user_id: user.id }])
-        .select();
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (insertError) throw insertError;
 
-      set((state) => ({
-        activities: [data[0], ...state.activities],
-      }));
+      console.log("Activity logged:", newActivity);
+      set((state) => ({ activities: [newActivity, ...state.activities] }));
 
-      return data[0];
+      // Step 2: After logging, call the database function to update relevant goals.
+      // We check for both 'calories' and 'steps' as an activity might contribute to either.
+
+      // Update calories goal if calories were logged
+      if (newActivity.calories && newActivity.calories > 0) {
+        const { error: rpcError } = await supabase.rpc(
+          "increment_goal_progress",
+          {
+            user_id_input: user.id,
+            activity_type: "calories",
+            value_added: newActivity.calories,
+          }
+        );
+        if (rpcError) console.error("Error updating calories goal:", rpcError);
+      }
+
+      // Update steps goal if steps were logged (assuming steps are part of the activity data)
+      if (newActivity.steps && newActivity.steps > 0) {
+        const { error: rpcError } = await supabase.rpc(
+          "increment_goal_progress",
+          {
+            user_id_input: user.id,
+            activity_type: "steps",
+            value_added: newActivity.steps,
+          }
+        );
+        if (rpcError) console.error("Error updating steps goal:", rpcError);
+      }
+
+      // Step 3: Refresh all data to show the latest progress everywhere
+      await get().fetchDashboardData();
+
+      return newActivity;
     } catch (error) {
-      console.error("Error adding activity:", error);
+      console.error("Error in logActivityAndUpdateGoals:", error);
       throw error;
     }
   },
 
-  // In your activityStore.js, replace the addWaterIntake function with this:
+  // This function is kept for backwards compatibility but now just calls the new one.
+  addActivity: async (activityData) => {
+    return get().logActivityAndUpdateGoals(activityData);
+  },
+
   addWaterIntake: async (glassesToAdd) => {
     try {
       const {
@@ -165,7 +198,6 @@ export const useActivityStore = create((set, get) => ({
 
       const today = new Date().toISOString().split("T")[0];
 
-      // Get current water intake for today
       const { data: existingEntry } = await supabase
         .from("water")
         .select("amount")
@@ -201,7 +233,6 @@ export const useActivityStore = create((set, get) => ({
     }
   },
 
-  // Real-time subscription setup
   setupRealtime: () => {
     const user = supabase.auth.getUser();
     if (!user) return;
@@ -227,7 +258,7 @@ export const useActivityStore = create((set, get) => ({
       subscription.unsubscribe();
     };
   },
-  // Add to your existing activityStore.js
+
   updateGoal: async (goalType, newGoalValue) => {
     try {
       const {
@@ -235,7 +266,6 @@ export const useActivityStore = create((set, get) => ({
       } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
-      // First check if goal already exists
       const { data: existingGoal } = await supabase
         .from("goals")
         .select("*")
@@ -243,33 +273,33 @@ export const useActivityStore = create((set, get) => ({
         .eq("goal_type", goalType)
         .single();
 
+      // THE FIX IS HERE: When creating or updating a goal, its current_value must be 0.
+      const newCurrentValue = 0;
+
       if (existingGoal) {
-        // Update existing goal
         const { error } = await supabase
           .from("goals")
           .update({
             target_value: newGoalValue,
+            current_value: newCurrentValue, // Reset progress on goal update
+            achieved: false, // Reset achieved status
             updated_at: new Date().toISOString(),
           })
           .eq("id", existingGoal.id);
-
         if (error) throw error;
       } else {
-        // Create new goal
         const { error } = await supabase.from("goals").insert([
           {
             user_id: user.id,
             goal_type: goalType,
             target_value: newGoalValue,
-            current_value: 0,
+            current_value: newCurrentValue, // Always start new goals at 0
             achieved: false,
           },
         ]);
-
         if (error) throw error;
       }
 
-      // Refresh goals data
       get().fetchDashboardData();
     } catch (error) {
       console.error("Error updating goal:", error);
@@ -278,7 +308,6 @@ export const useActivityStore = create((set, get) => ({
   },
 }));
 
-// Setup real-time when user logs in
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === "SIGNED_IN") {
     useActivityStore.getState().setupRealtime();

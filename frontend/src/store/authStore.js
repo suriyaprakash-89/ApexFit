@@ -4,9 +4,29 @@ import { supabase } from "../lib/supabase";
 
 export const useAuthStore = create((set) => ({
   user: null,
-  loading: true,
-  setUser: (session) => set({ user: session?.user, session }),
-  setLoading: (loading) => set({ loading }),
+  loading: true, // Start with loading = true
+
+  // --- NEW INITIALIZATION FUNCTION ---
+  initializeSession: () => {
+    // 1. Get the current session immediately
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      // Set user and, crucially, set loading to false only after the first check is done
+      set({ user: session?.user ?? null, loading: false });
+    });
+
+    // 2. Set up a listener for future auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      // When auth state changes, just update the user. No need to touch 'loading' again.
+      set({ user: session?.user ?? null });
+    });
+
+    // Return the unsubscribe function for cleanup
+    return () => {
+      subscription.unsubscribe();
+    };
+  },
 
   signUp: async (email, password, userData) => {
     const { data, error } = await supabase.auth.signUp({
@@ -55,8 +75,11 @@ export const useAuthStore = create((set) => ({
 
   signOut: async () => {
     const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    set({ user: null });
+    if (error) {
+      console.error("Error signing out:", error);
+      throw error;
+    }
+    // The onAuthStateChange listener will handle setting the user to null.
   },
 
   resetPassword: async (email) => {
@@ -80,9 +103,4 @@ export const useAuthStore = create((set) => ({
   },
 }));
 
-// Initialize auth state listener
-supabase.auth.onAuthStateChange((event, session) => {
-  console.log("Auth state changed:", event, session);
-  useAuthStore.getState().setUser(session);
-  useAuthStore.getState().setLoading(false);
-});
+// This part is removed from here. We will call initializeSession from App.jsx

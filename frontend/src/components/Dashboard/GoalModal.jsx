@@ -1,5 +1,4 @@
-// frontend/src/components/Dashboard/GoalModal.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useActivityStore } from "../../store/activityStore";
 import toast from "react-hot-toast";
 
@@ -11,8 +10,16 @@ const GoalModal = ({
   currentValue,
   icon,
 }) => {
-  const [newGoal, setNewGoal] = useState(currentGoal);
+  const [newGoal, setNewGoal] = useState(currentGoal || 0);
   const { updateGoal } = useActivityStore();
+
+  useEffect(() => {
+    // This hook ensures that when you click a new goal,
+    // the input field shows the correct current target value.
+    if (isOpen) {
+      setNewGoal(currentGoal || 0);
+    }
+  }, [isOpen, currentGoal]);
 
   if (!isOpen) return null;
 
@@ -43,9 +50,7 @@ const GoalModal = ({
     step: 1,
   };
 
-  // Convert glasses to liters for water (1 glass = 0.25L)
   const convertToLiters = (glasses) => (glasses * 0.25).toFixed(1);
-  const convertToGlasses = (liters) => Math.round(liters / 0.25);
 
   const handleSave = async () => {
     if (newGoal < config.min || newGoal > config.max) {
@@ -57,12 +62,10 @@ const GoalModal = ({
 
     try {
       await updateGoal(goalType, newGoal);
-      toast.success(
-        `${config.label} goal updated to ${newGoal} ${config.unit}!`
-      );
+      toast.success(`${config.label} goal set to ${newGoal} ${config.unit}!`);
       onClose();
     } catch (error) {
-      toast.error("Failed to update goal");
+      toast.error("Failed to set goal");
     }
   };
 
@@ -72,7 +75,7 @@ const GoalModal = ({
     }
   };
 
-  // Calculate current progress percentage
+  // Note: This percentage is for the DAILY total, not the goal progress
   const currentPercentage = Math.min(
     Math.round((currentValue / currentGoal) * 100),
     100
@@ -86,7 +89,7 @@ const GoalModal = ({
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Edit {config.label} Goal
+            Set {config.label} Goal
           </h2>
           <button
             onClick={onClose}
@@ -100,7 +103,7 @@ const GoalModal = ({
           <span className="text-3xl mr-3">{icon}</span>
           <div>
             <p className="text-lg font-medium text-gray-900 dark:text-white">
-              Current: {currentValue} {config.unit}
+              Current Daily Total: {currentValue} {config.unit}
             </p>
             {goalType === "water" && (
               <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -108,7 +111,7 @@ const GoalModal = ({
               </p>
             )}
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Progress: {currentPercentage}%
+              Current Goal Progress: {currentPercentage}%
             </p>
           </div>
         </div>
@@ -136,20 +139,6 @@ const GoalModal = ({
               Min: {config.min}, Max: {config.max}
             </p>
           </div>
-
-          {/* Recommended ranges */}
-          {goalType === "water" && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-              <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1">
-                💧 Recommended Daily Intake:
-              </h4>
-              <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
-                <li>• Sedentary: 8-12 glasses (2-3L)</li>
-                <li>• Active: 12-16 glasses (3-4L)</li>
-                <li>• Very Active: 16-20 glasses (4-5L)</li>
-              </ul>
-            </div>
-          )}
 
           <div className="flex space-x-3 pt-4">
             <button

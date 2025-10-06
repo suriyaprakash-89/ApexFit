@@ -16,6 +16,7 @@ import Activities from "./pages/Activities";
 import Goals from "./pages/Goals";
 import AdminPanel from "./pages/AdminPanel";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
+import PublicRoute from "./components/Auth/PublicRoute";
 import LoadingSpinner from "./components/UI/LoadingSpinner";
 import { useNotificationStore } from "./store/notificationStore";
 import Steps from "./pages/Steps";
@@ -24,7 +25,6 @@ import Settings from "./pages/Settings";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import ThemeAwareToaster from "./components/UI/ThemeAwareToaster";
 
-// --- NEW IMPORTS FOR DASHBOARD ROUTING ---
 import DashboardLayout from "./components/Layout/DashboardLayout";
 import Overview from "./pages/Overview";
 import AICoach from "./pages/AICoach";
@@ -33,8 +33,13 @@ import Insights from "./pages/Insights";
 import ARFitness from "./pages/ARFitness";
 
 function App() {
-  const { user, loading } = useAuthStore();
+  const { user, loading, initializeSession } = useAuthStore(); // Get initializeSession
   const { fetchNotifications, checkWaterReminder } = useNotificationStore();
+
+  // --- UPDATED: Call initializeSession only once on app startup ---
+  useEffect(() => {
+    initializeSession();
+  }, [initializeSession]);
 
   useEffect(() => {
     if (user) {
@@ -44,6 +49,8 @@ function App() {
     }
   }, [user, fetchNotifications, checkWaterReminder]);
 
+  // This loading check is now the main gatekeeper for the entire app.
+  // Nothing will render until the initial session check is complete.
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -59,10 +66,23 @@ function App() {
             }`}
           >
             <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
+              <Route
+                path="/login"
+                element={
+                  <PublicRoute>
+                    <Login />
+                  </PublicRoute>
+                }
+              />
+              <Route
+                path="/register"
+                element={
+                  <PublicRoute>
+                    <Register />
+                  </PublicRoute>
+                }
+              />
 
-              {/* --- NEW NESTED DASHBOARD ROUTE --- */}
               <Route
                 path="/dashboard"
                 element={
@@ -76,20 +96,17 @@ function App() {
                 <Route path="challenges" element={<Challenges />} />
                 <Route path="insights" element={<Insights />} />
                 <Route path="ar-fitness" element={<ARFitness />} />
-                {/* Redirect from "/dashboard" to "/dashboard/overview" */}
                 <Route
                   index
                   element={<Navigate to="/dashboard/overview" replace />}
                 />
               </Route>
 
-              {/* Redirect root path to the dashboard */}
               <Route
                 path="/"
                 element={<Navigate to="/dashboard/overview" replace />}
               />
 
-              {/* Other existing top-level routes */}
               <Route
                 path="/profile"
                 element={
