@@ -3,6 +3,8 @@ import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "./authStore";
 
+const apiUrl = import.meta.env.VITE_API_URL;
+
 export const useChallengeStore = create((set, get) => ({
   publicChallenges: [],
   userChallenges: [],
@@ -87,7 +89,7 @@ export const useChallengeStore = create((set, get) => ({
       } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      const response = await fetch("/api/ai/generate-challenge", {
+      const response = await fetch(`${apiUrl}/api/ai/generate-challenge`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

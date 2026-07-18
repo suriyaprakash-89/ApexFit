@@ -16,10 +16,11 @@ const GROQ_MODEL = "llama-3.1-8b-instant"; // Updated to valid model
  * POST /api/ai/ask - Now with Streaming!
  */
 router.post("/ask", authenticateToken, async (req, res) => {
-  // Handle client disconnection immediately
+  // Track client connection state; avoid writing to closed responses
+  let clientAlive = true;
   req.on("close", () => {
+    clientAlive = false;
     console.log("Client disconnected from AI stream");
-    res.end();
   });
 
   try {
@@ -65,13 +66,17 @@ router.post("/ask", authenticateToken, async (req, res) => {
       stream: true,
     });
 
-    // Stream with proper error handling
+    // Stream with proper error handling and clientAlive checks
     for await (const chunk of chatCompletion) {
-      if (res.headersSent) {
+      if (!clientAlive) break;
+      try {
         const content = chunk.choices[0]?.delta?.content || "";
         if (content) {
           res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
+      } catch (writeErr) {
+        console.error("Error writing AI stream chunk:", writeErr);
+        break;
       }
     }
 

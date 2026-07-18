@@ -38,8 +38,8 @@ const AIHealthCoach = () => {
     setMessages((prev) => [...prev, newUserMessage]);
 
     try {
-      // Prepare chat history for context
-      const chatHistory = messages.map((msg) => ({
+      // Prepare chat history for context: include the just-sent message
+      const chatHistory = [...messages, newUserMessage].map((msg) => ({
         role: msg.role,
         content: msg.content,
       }));
@@ -63,12 +63,13 @@ const AIHealthCoach = () => {
       }
 
       // Handle streaming response
+      if (!response.body) throw new Error("No response body from AI service");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let aiResponseContent = "";
 
       // Create a placeholder for the AI message with loading state
-      const aiMessageId = Date.now();
+      const aiMessageId = Date.now() + Math.floor(Math.random() * 1000);
       setMessages((prev) => [
         ...prev,
         {
@@ -80,6 +81,7 @@ const AIHealthCoach = () => {
         },
       ]);
 
+      // Stream read loop with safer writes
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -100,11 +102,11 @@ const AIHealthCoach = () => {
               aiResponseContent += data.content;
             }
 
-            // Update the AI message with streaming content and remove loading
+            // Update the AI message with streaming content. Keep isLoading true until finished.
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === aiMessageId
-                  ? { ...msg, content: aiResponseContent, isLoading: false }
+                  ? { ...msg, content: aiResponseContent }
                   : msg
               )
             );
@@ -113,6 +115,13 @@ const AIHealthCoach = () => {
           }
         }
       }
+
+      // Ensure the assistant message is marked not loading at the end
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === aiMessageId ? { ...msg, isLoading: false } : msg
+        )
+      );
     } catch (error) {
       console.error("AI API error:", error);
       setMessages((prev) => [
@@ -233,7 +242,7 @@ const AIHealthCoach = () => {
           <div className="space-y-3 p-1">
             {messages.map((msg, index) => (
               <div
-                key={`${msg.timestamp}-${index}`}
+                key={msg.id ?? `${msg.timestamp}-${index}`}
                 className={`p-3 rounded-lg transition-colors duration-200 ${
                   msg.role === "user"
                     ? "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 ml-8"
