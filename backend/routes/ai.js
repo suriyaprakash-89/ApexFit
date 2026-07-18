@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router();
 const Groq = require("groq-sdk");
 const authenticateToken = require("../middleware/auth");
+const supabase = require("../config/supabase");
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
@@ -93,6 +94,91 @@ router.post("/ask", authenticateToken, async (req, res) => {
         details: error.message,
       });
     }
+  }
+});
+
+router.post("/generate-challenge", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 1. Get user's recent activities and goals for context
+    const [activitiesRes, goalsRes] = await Promise.all([
+      supabase.from('activities').select('type, duration').eq('user_id', userId).limit(5),
+      supabase.from('goals').select('goal_type, target_value').eq('user_id', userId).eq('achieved', false),
+    ]);
+    
+    const recentActivities = activitiesRes.data || [];
+    const activeGoals = goalsRes.data || [];
+
+    // 2. Construct the detailed prompt for the AI
+    const prompt = `
+      You are a creative and encouraging fitness coach AI. Your task is to generate a new, personalized fitness challenge for a user.
+
+      USER CONTEXT:
+      - Recent Activities: ${JSON.stringify(recentActivities)}
+      - Active Goals: ${JSON.stringify(activeGoals)}
+
+      INSTRUCTIONS:
+      1. Based on the user's context, invent a new, fun, and achievable challenge.
+      2. The challenge should last between 3 to 7 days.
+      3. The challenge 'type' MUST be one of the following: 'steps', 'sleep', 'workout', 'water'.
+      4. The 'target_value' should be a single number representing the total to achieve (e.g., total steps, total minutes of workout).
+      5. Give it a creative 'name' and a short, motivational 'description'.
+      6. Assign 'points' between 50 and 300 based on difficulty.
+      7. Your response MUST be a single, minified JSON object with no other text.
+
+      EXAMPLE RESPONSE FORMAT:
+      {"name":"Sunrise Runner","description":"Run for 20 minutes every morning for 5 days straight!","type":"workout","duration_days":5,"target_value":100,"points":150}
+    `;
+
+    // 3. Call the AI
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: "user", content: prompt }],
+      model: GROQ_MODEL,
+      temperature: 0.8, // Be creative
+    });
+
+    const aiResponse = completion.choices[0]?.message?.content;
+    if (!aiResponse) {
+      throw new Error("AI did not return a response.");
+    }
+    
+    // 4. Parse and validate the AI's JSON response
+    let challengeData;
+    try {
+      challengeData = JSON.parse(aiResponse);
+    } catch (e) {
+      console.error("Failed to parse AI JSON response:", aiResponse);
+      throw new Error("AI returned an invalid format.");
+    }
+
+    // 5. Save the new challenge to the database
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + (challengeData.duration_days || 7));
+
+    const { data: newChallenge, error: insertError } = await supabase
+      .from('challenges')
+      .insert({
+        name: challengeData.name,
+        description: challengeData.description,
+        type: challengeData.type,
+        target_value: challengeData.target_value,
+        points: challengeData.points,
+        end_date: endDate.toISOString().split('T')[0],
+        is_public: true, // Make it public so others can see it too
+        created_by: userId,
+      })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
+
+    // 6. Send the newly created challenge back to the frontend
+    res.status(201).json(newChallenge);
+
+  } catch (error) {
+    console.error("Error generating AI challenge:", error);
+    res.status(500).json({ error: "Failed to generate AI challenge." });
   }
 });
 
