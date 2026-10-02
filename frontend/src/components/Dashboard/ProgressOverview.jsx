@@ -1,23 +1,48 @@
 // frontend/src/components/Dashboard/ProgressOverview.jsx
+// Goals with live progress from GET /api/goals/progress (computed from today's logs).
 import React from "react";
 import { Link } from "react-router-dom";
-import { Target } from "lucide-react";
+import { Target, Check } from "lucide-react";
 import EmptyState from "../UI/EmptyState";
-import { GOAL_TYPES, percentOf } from "../../utils/goals";
+import { Skeleton } from "../UI/Skeleton";
+import { GOAL_TYPES } from "../../utils/goals";
 
-const ProgressOverview = ({ goals }) => {
-  // Show the first 3 active goals
-  const activeGoals = goals.filter((goal) => !goal.achieved).slice(0, 3);
+const fmt = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
+
+const ProgressOverview = ({ goals, loading, error, onRetry }) => {
+  // Unfinished goals first, then up to 4 in total
+  const shown = [...goals].sort((a, b) => Number(a.done) - Number(b.done)).slice(0, 4);
+
+  if (loading) {
+    return (
+      <div className="space-y-5" aria-hidden="true">
+        {[0, 1, 2].map((i) => (
+          <div key={i}>
+            <Skeleton className="h-4 w-2/3 mb-2" />
+            <Skeleton className="h-2.5 w-full" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error && !goals.length) {
+    return (
+      <p className="text-sm text-muted">
+        Couldn't load goal progress.{" "}
+        <button onClick={onRetry} className="font-semibold underline">
+          Try again
+        </button>
+      </p>
+    );
+  }
 
   return (
     <div>
-      {activeGoals.length > 0 ? (
+      {shown.length > 0 ? (
         <ul className="space-y-4">
-          {activeGoals.map((goal) => {
+          {shown.map((goal) => {
             const type = GOAL_TYPES[goal.goal_type] || { label: goal.goal_type, unit: "", icon: "🎯" };
-            const current = Number(goal.current_value || 0);
-            const target = Number(goal.target_value);
-            const percentage = percentOf(current, target);
             return (
               <li key={goal.id}>
                 <div className="flex justify-between gap-2 text-sm mb-1.5 font-medium">
@@ -26,34 +51,36 @@ const ProgressOverview = ({ goals }) => {
                       {type.icon}
                     </span>
                     <span className="truncate">{type.label}</span>
+                    {goal.done && <Check className="w-4 h-4 ml-1.5 text-green-600 shrink-0" aria-label="done" />}
                   </span>
                   <span className="text-muted shrink-0">
-                    {current.toLocaleString()} / {target.toLocaleString()} {type.unit}
+                    {goal.current_value == null ? "–" : fmt(goal.current_value)} / {fmt(goal.target_value)} {type.unit}
                   </span>
                 </div>
                 <div
                   className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5"
                   role="progressbar"
-                  aria-valuenow={percentage}
+                  aria-valuenow={goal.percent}
                   aria-valuemin={0}
                   aria-valuemax={100}
-                  aria-label={`${type.label} progress`}
+                  aria-label={`${type.label} progress ${goal.period}`}
                 >
                   <div
-                    className="bg-primary-600 h-2.5 rounded-full transition-all duration-300"
-                    style={{ width: `${percentage}%` }}
+                    className={`h-2.5 rounded-full transition-all duration-500 ${goal.done ? "bg-green-500" : "bg-primary-600"}`}
+                    style={{ width: `${goal.percent}%` }}
                   />
                 </div>
+                <p className="text-xs text-muted mt-1 capitalize">{goal.period}</p>
               </li>
             );
           })}
         </ul>
       ) : (
-        <EmptyState compact icon={Target} title="No active goals" description="Set a goal to start tracking your progress." />
+        <EmptyState compact icon={Target} title="No goals yet" description="Set a goal and your progress updates automatically as you log." />
       )}
 
       <Link to="/goals" className="btn-soft w-full mt-6">
-        {activeGoals.length > 0 ? "Manage goals" : "Set a goal"}
+        {shown.length > 0 ? "Manage goals" : "Set a goal"}
       </Link>
     </div>
   );

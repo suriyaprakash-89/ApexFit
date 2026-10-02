@@ -23,13 +23,26 @@ const STAT_CONFIG = [
 
 const Overview = () => {
   const { user } = useAuthStore();
-  const { activities, steps, sleep, water, goals, dashboardLoading, dashboardError, fetchDashboardData } =
-    useActivityStore();
+  const {
+    activities,
+    steps,
+    sleep,
+    water,
+    goals,
+    goalProgress,
+    goalProgressLoading,
+    goalProgressError,
+    dashboardLoading,
+    dashboardError,
+    fetchDashboardData,
+    fetchGoalProgress,
+  } = useActivityStore();
   const [selectedGoal, setSelectedGoal] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
-  }, [fetchDashboardData]);
+    fetchGoalProgress();
+  }, [fetchDashboardData, fetchGoalProgress]);
 
   const today = localDate();
   const todayValues = {
@@ -136,7 +149,12 @@ const Overview = () => {
                 <h2 className="card-title">Goals progress</h2>
                 <Target className="w-5 h-5 text-primary-500" aria-hidden="true" />
               </div>
-              <ProgressOverview goals={goals} />
+              <ProgressOverview
+                goals={goalProgress}
+                loading={goalProgressLoading}
+                error={goalProgressError}
+                onRetry={fetchGoalProgress}
+              />
             </section>
             <section className="card">
               <h2 className="card-title mb-5">Recent activities</h2>

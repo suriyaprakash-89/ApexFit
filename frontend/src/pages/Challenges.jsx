@@ -8,6 +8,7 @@ import Page from "../components/UI/Page";
 import EmptyState from "../components/UI/EmptyState";
 import { SkeletonCard } from "../components/UI/Skeleton";
 import { formatDate } from "../utils/date";
+import { onEngagementUpdate } from "../lib/engagement";
 
 const RANK_STYLES = [
   "bg-yellow-400 text-yellow-900",
@@ -21,7 +22,7 @@ const Challenges = () => {
   const { user } = useAuthStore();
   const {
     availableChallenges,
-    userChallenges,
+    myChallenges,
     leaderboard,
     loading,
     error,
@@ -34,9 +35,13 @@ const Challenges = () => {
 
   useEffect(() => {
     fetchChallengeData();
+    // Refresh when a background progress check completes a challenge
+    return onEngagementUpdate((result) => {
+      if (result.completedChallenges?.length) fetchChallengeData();
+    });
   }, [fetchChallengeData]);
 
-  const joinedIds = new Set(userChallenges.map((uc) => uc.challenge_id));
+  const joinedIds = new Set(myChallenges.map((uc) => uc.challenge_id));
 
   const handleJoin = async (challenge) => {
     setJoiningId(challenge.id);
@@ -103,22 +108,56 @@ const Challenges = () => {
                 <Trophy className="w-5 h-5 text-yellow-500" aria-hidden="true" />
                 My active challenges
               </h2>
-              {userChallenges.length > 0 ? (
+              {myChallenges.length > 0 ? (
                 <ul className="space-y-3">
-                  {userChallenges.map((uc) => (
+                  {myChallenges.map((uc) => (
                     <li key={uc.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <h3 className="font-semibold text-gray-900 dark:text-white">{uc.challenges.name}</h3>
-                          <p className="text-sm text-muted mt-0.5">{uc.challenges.description}</p>
+                          <h3 className="font-semibold text-gray-900 dark:text-white">{uc.challenge.name}</h3>
+                          <p className="text-sm text-muted mt-0.5">{uc.challenge.description}</p>
                         </div>
-                        <span className="shrink-0 text-xs font-bold text-yellow-800 bg-yellow-100 dark:text-yellow-200 dark:bg-yellow-900/40 px-2.5 py-1 rounded-full">
-                          {uc.challenges.points} pts
+                        <span
+                          className={`shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${
+                            uc.completed
+                              ? "text-green-800 bg-green-100 dark:text-green-200 dark:bg-green-900/40"
+                              : "text-yellow-800 bg-yellow-100 dark:text-yellow-200 dark:bg-yellow-900/40"
+                          }`}
+                        >
+                          {uc.completed ? `+${uc.challenge.points} pts earned` : `${uc.challenge.points} pts`}
                         </span>
                       </div>
+                      {uc.tracked ? (
+                        <>
+                          <div className="flex justify-between text-xs mt-3 mb-1">
+                            <span className="text-muted">
+                              {Number(uc.progress).toLocaleString(undefined, { maximumFractionDigits: 1 })} /{" "}
+                              {Number(uc.target).toLocaleString()} {uc.unit}
+                            </span>
+                            <span className="font-semibold text-gray-900 dark:text-white">{uc.percent}%</span>
+                          </div>
+                          <div
+                            className="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-600"
+                            role="progressbar"
+                            aria-valuenow={uc.percent}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-label={`${uc.challenge.name} progress`}
+                          >
+                            <div
+                              className={`h-2 rounded-full transition-all duration-500 ${uc.completed ? "bg-green-500" : "bg-primary-600"}`}
+                              style={{ width: `${uc.percent}%` }}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <p className="mt-3 text-xs text-muted">Custom challenge: progress isn't tracked automatically.</p>
+                      )}
                       <p className="mt-2 text-xs text-muted flex items-center gap-1">
                         <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
-                        Ends {formatDate(uc.challenges.end_date, { month: "short", day: "numeric" })}
+                        {uc.completed
+                          ? `Completed ${formatDate(uc.completed_at?.slice(0, 10), { month: "short", day: "numeric" })}`
+                          : `Ends ${formatDate(uc.challenge.end_date, { month: "short", day: "numeric" })} · progress updates as you log`}
                       </p>
                     </li>
                   ))}
@@ -198,43 +237,50 @@ const Challenges = () => {
               <Award className="w-5 h-5 text-purple-500" aria-hidden="true" />
               Leaderboard
             </h2>
-            {leaderboard.length > 0 ? (
+            {leaderboard.top.length > 0 ? (
               <ol className="space-y-2">
-                {leaderboard.map((profile, index) => {
-                  const isMe = profile.id === user?.id;
-                  return (
-                    <li
-                      key={profile.id}
-                      className={`flex items-center justify-between p-3 rounded-xl ${
-                        isMe ? "bg-primary-50 dark:bg-primary-900/30 ring-1 ring-primary-200 dark:ring-primary-800" : "bg-gray-50 dark:bg-gray-700/50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span
-                          className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold text-sm ${
-                            RANK_STYLES[index] || "bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200"
-                          }`}
-                          aria-label={`Rank ${index + 1}`}
-                        >
-                          {index + 1}
-                        </span>
-                        <span className="font-medium text-gray-900 dark:text-white truncate">
-                          {profile.name || `Athlete #${profile.id.substring(0, 4)}`}
-                          {isMe && <span className="text-muted font-normal"> (you)</span>}
-                        </span>
-                      </div>
-                      <span className="font-bold text-purple-600 dark:text-purple-400">
-                        {(profile.points || 0).toLocaleString()}
+                {leaderboard.top.map((entry) => (
+                  <li
+                    key={entry.rank}
+                    className={`flex items-center justify-between p-3 rounded-xl ${
+                      entry.isMe
+                        ? "bg-primary-50 dark:bg-primary-900/30 ring-1 ring-primary-200 dark:ring-primary-800"
+                        : "bg-gray-50 dark:bg-gray-700/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span
+                        className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold text-sm ${
+                          RANK_STYLES[entry.rank - 1] || "bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200"
+                        }`}
+                        aria-label={`Rank ${entry.rank}`}
+                      >
+                        {entry.rank}
                       </span>
-                    </li>
-                  );
-                })}
+                      <span className="font-medium text-gray-900 dark:text-white truncate">
+                        {entry.name}
+                        {entry.isMe && <span className="text-muted font-normal"> (you)</span>}
+                      </span>
+                    </div>
+                    <span className="font-bold text-purple-600 dark:text-purple-400">{entry.points.toLocaleString()}</span>
+                  </li>
+                ))}
               </ol>
             ) : (
               <p className="text-sm text-muted">No points earned yet. Be the first!</p>
             )}
+            {leaderboard.me && !leaderboard.top.some((e) => e.isMe) && (
+              <p className="mt-3 flex items-center justify-between p-3 rounded-xl bg-primary-50 dark:bg-primary-900/30 text-sm">
+                <span className="font-medium text-gray-900 dark:text-white">
+                  You're #{leaderboard.me.rank}
+                </span>
+                <span className="font-bold text-purple-600 dark:text-purple-400">
+                  {leaderboard.me.points.toLocaleString()} pts
+                </span>
+              </p>
+            )}
             <p className="mt-4 p-3 bg-primary-50 dark:bg-primary-900/20 rounded-xl text-sm text-primary-800 dark:text-primary-200">
-              💡 Earn points by completing challenges and AR workouts.
+              💡 Earn points by completing challenges, unlocking achievements and finishing AR workouts.
             </p>
           </section>
         </div>

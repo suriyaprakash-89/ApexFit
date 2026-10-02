@@ -1,7 +1,6 @@
 // frontend/src/pages/Login.jsx
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Github } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import toast from "react-hot-toast";
 import { AuthLayout, PasswordInput, GoogleIcon } from "../components/Auth/AuthLayout";
@@ -102,16 +101,10 @@ const Login = () => {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <button type="button" onClick={() => handleSocialLogin("google")} className="btn-secondary">
-          <GoogleIcon />
-          Google
-        </button>
-        <button type="button" onClick={() => handleSocialLogin("github")} className="btn-secondary">
-          <Github className="w-5 h-5" aria-hidden="true" />
-          GitHub
-        </button>
-      </div>
+      <button type="button" onClick={() => handleSocialLogin("google")} className="btn-secondary w-full">
+        <GoogleIcon />
+        Continue with Google
+      </button>
     </AuthLayout>
   );
 };

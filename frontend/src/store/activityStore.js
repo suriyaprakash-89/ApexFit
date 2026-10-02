@@ -3,6 +3,8 @@ import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 import { localDate, addDays } from "../utils/date";
 import { runOrQueue, newClientId, isNetworkError } from "./syncStore";
+import { apiJson, withClientDate } from "../lib/api";
+import { scheduleEngagementCheck } from "../lib/engagement";
 
 // Last successful dashboard load, so Home still shows something offline
 const snapshotKey = (userId) => `apexfit-dashboard-${userId}`;
@@ -55,6 +57,8 @@ export const useActivityStore = create((set, get) => ({
   sleep: [],
   water: [],
   goals: [],
+  goalProgress: [],
+  goalProgressLoading: true,
   dashboardLoading: true,
   dashboardError: null,
   chart: { key: null, steps: [], activities: [], loading: true },
@@ -142,9 +146,21 @@ export const useActivityStore = create((set, get) => ({
     }
   },
 
+  /** Goals with progress computed live from the user's logs (server-side). */
+  fetchGoalProgress: async () => {
+    try {
+      const goalProgress = await apiJson(`/api/goals/progress?${withClientDate()}`);
+      set({ goalProgress, goalProgressLoading: false, goalProgressError: null });
+    } catch (error) {
+      console.warn("Goal progress unavailable:", error.message);
+      set({ goalProgressLoading: false, goalProgressError: error.message });
+    }
+  },
+
   /**
-   * Save an activity and bump the calories goal progress. Works offline: the
-   * client-generated id makes a later replay idempotent. Returns { activity, queued }.
+   * Save an activity. Works offline: the client-generated id makes a later replay
+   * idempotent. Goal progress is computed from logs, so nothing else to update.
+   * Returns { activity, queued }.
    */
   logActivity: async (activityData) => {
     const userId = await getUserId();
@@ -153,23 +169,12 @@ export const useActivityStore = create((set, get) => ({
     const activity = { ...activityData, id: newClientId(), user_id: userId };
     const { queued } = await runOrQueue({ kind: "upsert", table: "activities", payload: activity, onConflict: "id" });
 
-    if (activity.calories > 0) {
-      try {
-        await runOrQueue({
-          kind: "rpc",
-          fn: "increment_goal_progress",
-          payload: { user_id_input: userId, activity_type: "calories", value_added: activity.calories },
-        });
-      } catch (rpcError) {
-        console.warn("Could not update calories goal:", rpcError.message);
-      }
-    }
-
     if (queued) {
       // Show it right away; it syncs when the connection returns
       set((state) => ({ activities: [{ ...activity, pending: true }, ...state.activities] }));
     } else {
       get().fetchDashboardData();
+      get().fetchGoalProgress();
     }
     return { activity, queued };
   },
@@ -204,16 +209,10 @@ export const useActivityStore = create((set, get) => ({
       .limit(1)
       .maybeSingle();
 
-    // A new or changed target starts its progress from zero.
     if (existingGoal) {
       const { error } = await supabase
         .from("goals")
-        .update({
-          target_value: newGoalValue,
-          current_value: 0,
-          achieved: false,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ target_value: newGoalValue, achieved: false, updated_at: new Date().toISOString() })
         .eq("id", existingGoal.id);
       if (error) throw error;
     } else {
@@ -223,7 +222,8 @@ export const useActivityStore = create((set, get) => ({
       if (error) throw error;
     }
 
-    await get().fetchDashboardData();
+    await Promise.all([get().fetchDashboardData(), get().fetchGoalProgress()]);
+    scheduleEngagementCheck();
   },
 
   /** One realtime channel per signed-in user; call stopRealtime on sign-out. */
@@ -253,6 +253,8 @@ export const useActivityStore = create((set, get) => ({
       sleep: [],
       water: [],
       goals: [],
+      goalProgress: [],
+      goalProgressLoading: true,
       dashboardLoading: true,
       dashboardError: null,
       chart: { key: null, steps: [], activities: [], loading: true },

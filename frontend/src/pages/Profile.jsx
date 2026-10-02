@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
 import Page from "../components/UI/Page";
 import { SkeletonCard } from "../components/UI/Skeleton";
+import AchievementsCard from "../components/Profile/AchievementsCard";
 
 const bmiCategory = (bmi) => {
   if (bmi < 18.5) return { label: "Underweight", color: "text-blue-600 dark:text-blue-400" };
@@ -164,6 +165,9 @@ const Profile = () => {
             <p className="text-sm text-muted">Add your weight and height to see your BMI.</p>
           )}
         </section>
+      </div>
+      <div className="mt-6">
+        <AchievementsCard points={profile.points ?? 0} />
       </div>
     </Page>
   );

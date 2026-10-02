@@ -12,6 +12,8 @@ import AppShell from "./components/Layout/AppShell";
 
 // Every page is its own chunk, so heavy pages (AR/TensorFlow, charts) only
 // download when they are opened.
+const Landing = lazy(() => import("./pages/Landing"));
+const Privacy = lazy(() => import("./pages/Privacy"));
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
@@ -38,6 +40,17 @@ function App() {
     initializeSession();
   }, [initializeSession]);
 
+  // Prevent scroll/wheel on number inputs
+  useEffect(() => {
+    const handleWheel = (e) => {
+      if (e.target.type === "number") {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener("wheel", handleWheel, { passive: false });
+    return () => document.removeEventListener("wheel", handleWheel, { passive: false });
+  }, []);
+
   // Nothing renders until the initial session check is complete.
   if (loading) {
     return <LoadingSpinner />;
@@ -47,6 +60,10 @@ function App() {
     <Router>
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
+          {/* Marketing: landing for visitors, signed-in users go straight to the app */}
+          <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
+          <Route path="/privacy" element={<Privacy />} />
+
           {/* Signed-out pages */}
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
@@ -72,7 +89,6 @@ function App() {
           </Route>
 
           {/* Old URLs keep working */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard/overview" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard/ai-coach" element={<Navigate to="/coach" replace />} />
           <Route path="/dashboard/challenges" element={<Navigate to="/challenges" replace />} />

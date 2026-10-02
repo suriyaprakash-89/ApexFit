@@ -5,7 +5,18 @@ import { supabase } from "../lib/supabase";
 // Module-level guard: StrictMode runs effects twice, but we only want one listener.
 let authSubscription = null;
 
-export const useAuthStore = create((set) => ({
+/**
+ * Supabase hands back a NEW user object on every token refresh (~hourly).
+ * Keep the old reference when nothing changed, otherwise every page that
+ * depends on `user` refetches and wipes unsaved edits (Profile, Settings).
+ */
+const sameUser = (a, b) =>
+  a === b ||
+  (a && b && a.id === b.id && a.updated_at === b.updated_at && a.email === b.email &&
+    JSON.stringify(a.user_metadata) === JSON.stringify(b.user_metadata) &&
+    JSON.stringify(a.app_metadata) === JSON.stringify(b.app_metadata));
+
+export const useAuthStore = create((set, get) => ({
   user: null,
   session: null,
   loading: true, // Start with loading = true
@@ -28,8 +39,12 @@ export const useAuthStore = create((set) => ({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      // When auth state changes, update both user and session.
-      set({ user: session?.user ?? null, session: session ?? null, loading: false });
+      const nextUser = session?.user ?? null;
+      set({
+        user: sameUser(get().user, nextUser) ? get().user : nextUser,
+        session: session ?? null,
+        loading: false,
+      });
     });
     authSubscription = subscription;
   },

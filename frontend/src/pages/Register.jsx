@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import toast from "react-hot-toast";
-import { AuthLayout, PasswordInput } from "../components/Auth/AuthLayout";
+import { AuthLayout, PasswordInput, GoogleIcon } from "../components/Auth/AuthLayout";
 
 const MIN_PASSWORD = 8;
 
@@ -18,7 +18,7 @@ const Register = () => {
     height: "",
   });
   const [loading, setLoading] = useState(false);
-  const { signUp } = useAuthStore();
+  const { signUp, signInWithProvider } = useAuthStore();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -38,6 +38,19 @@ const Register = () => {
     if (formData.password !== formData.confirmPassword) {
       toast.error("Passwords do not match");
       return;
+    }
+    // The database stores age as a whole number; "25.5" would make sign-up fail
+    const age = formData.age === "" ? null : Number(formData.age);
+    if (age !== null && (!Number.isInteger(age) || age < 10 || age > 120)) {
+      toast.error("Age must be a whole number between 10 and 120");
+      return;
+    }
+    for (const [field, label, min, max] of [["weight", "Weight", 20, 400], ["height", "Height", 50, 260]]) {
+      const v = formData[field] === "" ? null : Number(formData[field]);
+      if (v !== null && (!Number.isFinite(v) || v < min || v > max)) {
+        toast.error(`${label} must be between ${min} and ${max}`);
+        return;
+      }
     }
 
     setLoading(true);
@@ -71,6 +84,24 @@ const Register = () => {
         </>
       }
     >
+      {/* Google fills in your name, email and photo from your Google account */}
+      <button
+        type="button"
+        onClick={() => signInWithProvider("google").catch((error) => toast.error(error.message))}
+        className="btn-secondary w-full"
+      >
+        <GoogleIcon />
+        Sign up with Google
+      </button>
+      <div className="relative my-6">
+        <div className="absolute inset-0 flex items-center" aria-hidden="true">
+          <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+        </div>
+        <p className="relative flex justify-center text-sm">
+          <span className="px-3 bg-white dark:bg-gray-800 text-muted">or sign up with email</span>
+        </p>
+      </div>
+
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
           <label htmlFor="name" className="label">

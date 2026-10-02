@@ -13,6 +13,7 @@ import { PageSkeleton } from "../UI/Skeleton";
 import ErrorBoundary from "../UI/ErrorBoundary";
 import { useSyncStore } from "../../store/syncStore";
 import { supabase } from "../../lib/supabase";
+import { runEngagementCheck, onEngagementUpdate } from "../../lib/engagement";
 import {
   NAV_SECTIONS,
   ACCOUNT_ITEMS,
@@ -32,7 +33,24 @@ const Logo = ({ compact = false }) => (
   </span>
 );
 
-const Avatar = ({ user, size = "w-9 h-9" }) => (
+const Avatar = ({ user, size = "w-9 h-9" }) => {
+  const [broken, setBroken] = useState(false);
+  const photo = user?.user_metadata?.avatar_url || user?.user_metadata?.picture;
+  if (photo && !broken) {
+    return (
+      <img
+        src={photo}
+        alt=""
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(true)}
+        className={`${size} shrink-0 rounded-full object-cover`}
+      />
+    );
+  }
+  return <InitialAvatar user={user} size={size} />;
+};
+
+const InitialAvatar = ({ user, size }) => (
   <span
     className={`${size} shrink-0 rounded-full bg-gradient-to-br from-primary-600 to-teal-500 flex items-center justify-center text-white font-semibold text-sm`}
     aria-hidden="true"
@@ -390,8 +408,15 @@ const AppShell = () => {
     notifications.fetchNotifications(userId);
     notifications.startRealtime(userId);
     activity.startRealtime(userId);
-    const interval = setInterval(() => notifications.checkWaterReminder(userId), 60 * 60 * 1000);
+    // Catch up on challenges/achievements/goal notifications earned since the last visit
+    runEngagementCheck();
+    // Goal progress depends on every log, so refresh it after each progress check
+    const stopListening = onEngagementUpdate(() => useActivityStore.getState().fetchGoalProgress());
+    const firstReminder = setTimeout(() => notifications.checkReminders(userId), 5 * 60 * 1000);
+    const interval = setInterval(() => notifications.checkReminders(userId), 60 * 60 * 1000);
     return () => {
+      stopListening();
+      clearTimeout(firstReminder);
       clearInterval(interval);
       useNotificationStore.getState().stopRealtime();
       useActivityStore.getState().stopRealtime();

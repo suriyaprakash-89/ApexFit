@@ -17,4 +17,12 @@ module.exports = {
   aiChatDailyLimiter: perUser(24 * 60 * 60 * 1000, 200, "Daily AI coach limit reached. Try again tomorrow."),
   aiChallengeLimiter: perUser(60 * 60 * 1000, 5, "You can generate up to 5 challenges per hour."),
   aiInsightsLimiter: perUser(60 * 60 * 1000, 10, "Too many insight refreshes. Try again later."),
+  engagementLimiter: perUser(60 * 60 * 1000, 120, "Too many progress checks. Try again later."),
+  publicLimiter: rateLimit({
+    windowMs: 60 * 1000,
+    limit: 30,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { error: "Too many requests." },
+  }),
 };

@@ -72,27 +72,47 @@ export const useNotificationStore = create((set, get) => ({
   },
 
   /** Hourly nudge if the user is well behind on water (respects their settings). */
-  checkWaterReminder: async (userId) => {
-    if (!userId) return;
+  /**
+   * In-app nudges, respecting Settings:
+   *  - water reminders: hourly 8:00–22:00 while under half the water goal
+   *  - goal reminders: once each evening (after 18:00) if under half the step goal
+   */
+  checkReminders: async (userId) => {
+    if (!userId || !navigator.onLine) return;
+    const hour = new Date().getHours();
+    if (hour < 8 || hour >= 22) return; // no reminders at night
     try {
-      const [{ data: settingsRow }, { data: waterRow }, { data: goals }] = await Promise.all([
+      const today = localDate();
+      const [{ data: settingsRow }, { data: waterRow }, { data: stepsRow }, { data: goals }] = await Promise.all([
         supabase.from("user_settings").select("settings").eq("user_id", userId).maybeSingle(),
-        supabase.from("water").select("amount").eq("user_id", userId).eq("date", localDate()).maybeSingle(),
-        supabase.from("goals").select("goal_type, target_value").eq("user_id", userId).eq("goal_type", "water"),
+        supabase.from("water").select("amount").eq("user_id", userId).eq("date", today).maybeSingle(),
+        supabase.from("steps").select("steps").eq("user_id", userId).eq("date", today).maybeSingle(),
+        supabase.from("goals").select("goal_type, target_value").eq("user_id", userId).in("goal_type", ["water", "steps"]),
       ]);
       const settings = settingsRow?.settings || {};
-      if (settings.notifications === false || settings.water_reminders === false) return;
+      if (settings.notifications === false) return;
 
-      const hour = new Date().getHours();
-      if (hour < 8 || hour >= 22) return; // no reminders at night
+      if (settings.water_reminders !== false) {
+        const goal = getGoalTarget(goals, "water");
+        const amount = waterRow?.amount || 0;
+        if (amount < goal / 2) {
+          toast(`💧 Time for some water! You've had ${amount} of ${goal} glasses today.`, { duration: 6000 });
+        }
+      }
 
-      const goal = getGoalTarget(goals, "water");
-      const amount = waterRow?.amount || 0;
-      if (amount < goal / 2) {
-        toast(`💧 Time for some water! You've had ${amount} of ${goal} glasses today.`, { duration: 6000 });
+      const goalReminderKey = `apexfit-goal-reminder-${today}`;
+      if (settings.goal_reminders !== false && hour >= 18 && !localStorage.getItem(goalReminderKey)) {
+        const goal = getGoalTarget(goals, "steps");
+        const steps = stepsRow?.steps || 0;
+        if (steps < goal / 2) {
+          toast(`👟 Evening check-in: ${steps.toLocaleString()} of ${goal.toLocaleString()} steps. A short walk gets you closer!`, {
+            duration: 8000,
+          });
+          localStorage.setItem(goalReminderKey, "1");
+        }
       }
     } catch (error) {
-      console.error("Error checking water reminder:", error);
+      console.error("Error checking reminders:", error);
     }
   },
 }));

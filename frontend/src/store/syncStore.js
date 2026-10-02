@@ -4,6 +4,7 @@
 import { create } from "zustand";
 import toast from "react-hot-toast";
 import { supabase } from "../lib/supabase";
+import { scheduleEngagementCheck } from "../lib/engagement";
 
 const STORAGE_KEY = "apexfit-offline-queue-v1";
 
@@ -112,6 +113,7 @@ export const useSyncStore = create((set, get) => ({
     if (synced) {
       toast.success(`Synced ${synced} offline change${synced > 1 ? "s" : ""}`);
       onSynced?.();
+      scheduleEngagementCheck();
     }
     if (dropped) toast.error(`${dropped} offline change${dropped > 1 ? "s" : ""} couldn't be saved`);
     if (retryLater && navigator.onLine) {
@@ -137,7 +139,9 @@ export async function runOrQueue(op) {
     return { queued: true, data: op.payload };
   }
   try {
-    return { queued: false, data: await execute(queued) };
+    const data = await execute(queued);
+    scheduleEngagementCheck(); // goals / challenges / achievements may have moved
+    return { queued: false, data };
   } catch (error) {
     if (!isRetryableError(error)) throw error;
     useSyncStore.getState().enqueue(queued);

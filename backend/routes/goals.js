@@ -4,8 +4,19 @@ const router = express.Router();
 const authenticateToken = require("../middleware/auth");
 const supabase = require("../config/supabase");
 const { sendServerError, sendBadRequest, isDate, toNumber } = require("../lib/http");
+const { resolveToday } = require("../lib/fitnessContext");
+const { getGoalProgress } = require("../lib/engagement");
 
 const GOAL_TYPES = ["steps", "calories", "sleep", "water", "weight", "workout"];
+
+// Goals with live progress computed from the user's logs (see lib/engagement.js)
+router.get("/progress", authenticateToken, async (req, res) => {
+  try {
+    res.json(await getGoalProgress(req.user.id, resolveToday(req.query.clientDate)));
+  } catch (error) {
+    sendServerError(res, error, "Failed to load goal progress.");
+  }
+});
 
 // Get all goals for a user
 router.get("/", authenticateToken, async (req, res) => {

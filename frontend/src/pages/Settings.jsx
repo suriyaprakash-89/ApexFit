@@ -207,7 +207,7 @@ const Settings = () => {
             <Switch
               id="set-goals"
               label="Goal reminders"
-              description="Remind me about my goals"
+              description="An evening nudge if I'm behind on steps"
               checked={settings.goal_reminders}
               disabled={!settings.notifications}
               onChange={(v) => setSettings({ ...settings, goal_reminders: v })}
@@ -215,7 +215,7 @@ const Settings = () => {
             <Switch
               id="set-weekly"
               label="Weekly reports"
-              description="Send me a weekly progress summary"
+              description="A weekly summary in your notifications"
               checked={settings.weekly_report}
               onChange={(v) => setSettings({ ...settings, weekly_report: v })}
             />

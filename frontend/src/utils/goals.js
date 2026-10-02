@@ -10,7 +10,7 @@ export const GOAL_TYPES = {
   sleep: { label: "Sleep Hours", unit: "hours", icon: "😴", min: 4, max: 12, step: 0.5 },
   water: { label: "Water Intake", unit: "glasses", icon: "💧", min: 4, max: 20, step: 1 },
   weight: { label: "Weight Goal", unit: "kg", icon: "⚖️", min: 30, max: 300, step: 0.1 },
-  workout: { label: "Workout Days", unit: "days", icon: "💪", min: 1, max: 31, step: 1 },
+  workout: { label: "Workout Days", unit: "days", icon: "💪", min: 1, max: 7, step: 1 },
 };
 
 export const GLASS_TO_LITER = 0.25;

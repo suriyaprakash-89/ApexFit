@@ -15,8 +15,9 @@ const authenticateToken = async (req, res, next) => {
       error,
     } = await supabase.auth.getUser(token);
 
-    if (error) {
-      return res.status(403).json({ error: "Invalid token" });
+    if (error || !user) {
+      // 401 (not 403) tells the client to refresh its session and retry
+      return res.status(401).json({ error: "Your session has expired. Please sign in again." });
     }
 
     req.user = user;
