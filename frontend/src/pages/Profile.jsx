@@ -1,214 +1,171 @@
 // frontend/src/pages/Profile.jsx
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../store/authStore';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect, useCallback } from "react";
+import { User, HeartPulse } from "lucide-react";
+import toast from "react-hot-toast";
+import { supabase } from "../lib/supabase";
+import { useAuthStore } from "../store/authStore";
+import Page from "../components/UI/Page";
+import { SkeletonCard } from "../components/UI/Skeleton";
+
+const bmiCategory = (bmi) => {
+  if (bmi < 18.5) return { label: "Underweight", color: "text-blue-600 dark:text-blue-400" };
+  if (bmi < 25) return { label: "Healthy weight", color: "text-green-600 dark:text-green-400" };
+  if (bmi < 30) return { label: "Overweight", color: "text-amber-600 dark:text-amber-400" };
+  return { label: "Obese range", color: "text-red-600 dark:text-red-400" };
+};
 
 const Profile = () => {
   const { user } = useAuthStore();
   const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
+
+  const fetchProfile = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      if (error) throw error;
+      setProfile(data);
+      setDraft(data);
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      if (navigator.onLine) toast.error("Failed to load profile");
+    }
+  }, [user]);
 
   useEffect(() => {
     fetchProfile();
-  }, [user]);
-
-  const fetchProfile = async () => {
-    if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (error) throw error;
-      setProfile(data);
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      toast.error('Failed to load profile');
-    }
-  };
+  }, [fetchProfile]);
 
   const handleSave = async (e) => {
     e.preventDefault();
-    setLoading(true);
-
+    setSaving(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          name: profile.name,
-          age: profile.age,
-          weight: profile.weight,
-          height: profile.height,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id);
-
+      const updates = {
+        name: draft.name?.trim() || null,
+        age: draft.age === "" || draft.age == null ? null : parseInt(draft.age, 10),
+        weight: draft.weight === "" || draft.weight == null ? null : parseFloat(draft.weight),
+        height: draft.height === "" || draft.height == null ? null : parseFloat(draft.height),
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from("profiles").update(updates).eq("id", user.id);
       if (error) throw error;
-
-      toast.success('Profile updated successfully!');
+      // Keep the auth metadata (used for the greeting/avatar) in sync with the name
+      if (updates.name !== user.user_metadata?.name) {
+        await supabase.auth.updateUser({ data: { name: updates.name } });
+      }
+      setProfile({ ...profile, ...updates });
+      setDraft({ ...profile, ...updates });
       setEditing(false);
+      toast.success("Profile updated");
     } catch (error) {
-      console.error('Error updating profile:', error);
-      toast.error('Failed to update profile');
+      console.error("Error updating profile:", error);
+      toast.error("Failed to update profile");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const calculateBMI = () => {
-    if (!profile?.weight || !profile?.height) return null;
-    const heightInMeters = profile.height / 100;
-    return (profile.weight / (heightInMeters * heightInMeters)).toFixed(1);
+  const cancel = () => {
+    setDraft(profile);
+    setEditing(false);
   };
 
   if (!profile) {
     return (
-      <div className="container mx-auto px-4 py-6">
-        <div className="animate-pulse">Loading profile...</div>
-      </div>
+      <Page title="Profile" icon={User}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <SkeletonCard lines={6} className="lg:col-span-2" />
+          <SkeletonCard lines={3} />
+        </div>
+      </Page>
     );
   }
 
+  const weight = Number(profile.weight);
+  const height = Number(profile.height);
+  const bmi = weight > 0 && height > 0 ? weight / (height / 100) ** 2 : null;
+  const category = bmi ? bmiCategory(bmi) : null;
+
+  const fields = [
+    { key: "name", label: "Name", type: "text", autoComplete: "name" },
+    { key: "age", label: "Age", type: "number", inputMode: "numeric", min: 1, max: 120 },
+    { key: "weight", label: "Weight (kg)", type: "number", inputMode: "decimal", step: "0.1", min: 1 },
+    { key: "height", label: "Height (cm)", type: "number", inputMode: "decimal", step: "0.1", min: 1 },
+  ];
+
   return (
-    <div className="container mx-auto px-4 py-6 max-w-2xl">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Profile</h1>
-          <button
-            onClick={() => setEditing(!editing)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            {editing ? 'Cancel' : 'Edit Profile'}
+    <Page
+      title="Profile"
+      icon={User}
+      subtitle="Your details help personalise your goals and AI coach"
+      actions={
+        !editing && (
+          <button onClick={() => setEditing(true)} className="btn-primary">
+            Edit profile
           </button>
-        </div>
-
-        <form onSubmit={handleSave}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Name
-              </label>
-              <input
-                type="text"
-                value={profile.name || ''}
-                onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                disabled={!editing}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        )
+      }
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <form onSubmit={handleSave} className="card lg:col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {fields.map(({ key, label, ...inputProps }) => (
+              <div key={key}>
+                <label htmlFor={`profile-${key}`} className="label">
+                  {label}
+                </label>
+                <input
+                  id={`profile-${key}`}
+                  value={draft[key] ?? ""}
+                  onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
+                  disabled={!editing}
+                  className="input-field"
+                  {...inputProps}
+                />
+              </div>
+            ))}
+            <div className="sm:col-span-2">
+              <label htmlFor="profile-email" className="label">
                 Email
               </label>
-              <input
-                type="email"
-                value={profile.email}
-                disabled
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-400"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Age
-              </label>
-              <input
-                type="number"
-                value={profile.age || ''}
-                onChange={(e) => setProfile({ ...profile, age: e.target.value ? parseInt(e.target.value) : null })}
-                disabled={!editing}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Weight (kg)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={profile.weight || ''}
-                onChange={(e) => setProfile({ ...profile, weight: e.target.value ? parseFloat(e.target.value) : null })}
-                disabled={!editing}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Height (cm)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                value={profile.height || ''}
-                onChange={(e) => setProfile({ ...profile, height: e.target.value ? parseFloat(e.target.value) : null })}
-                disabled={!editing}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                BMI
-              </label>
-              <div className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-600">
-                <span className="text-gray-800 dark:text-white">
-                  {calculateBMI() || 'N/A'}
-                </span>
-              </div>
+              <input id="profile-email" type="email" value={profile.email} disabled className="input-field" />
             </div>
           </div>
 
           {editing && (
-            <div className="flex justify-end space-x-4">
-              <button
-                type="button"
-                onClick={() => setEditing(false)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-6">
+              <button type="button" onClick={cancel} className="btn-secondary">
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loading ? 'Saving...' : 'Save Changes'}
+              <button type="submit" disabled={saving} className="btn-primary">
+                {saving ? "Saving..." : "Save changes"}
               </button>
             </div>
           )}
         </form>
 
-        <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-          <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-200 mb-2">
-            Health Insights
-          </h3>
-          {calculateBMI() && (
-            <p className="text-blue-700 dark:text-blue-300">
-              Your BMI is {calculateBMI()}. {
-                calculateBMI() < 18.5 ? 'You are underweight.' :
-                calculateBMI() < 25 ? 'You have a healthy weight.' :
-                calculateBMI() < 30 ? 'You are overweight.' :
-                'You are obese.'
-              }
-            </p>
+        <section className="card self-start">
+          <h2 className="card-title flex items-center gap-2 mb-4">
+            <HeartPulse className="w-5 h-5 text-primary-600 dark:text-primary-400" aria-hidden="true" />
+            Body mass index
+          </h2>
+          {bmi ? (
+            <>
+              <p className="text-4xl font-bold text-gray-900 dark:text-white">{bmi.toFixed(1)}</p>
+              <p className={`mt-1 font-medium ${category.color}`}>{category.label}</p>
+              <p className="mt-4 text-sm text-muted">
+                BMI is a rough screening number that doesn't account for muscle mass. Use it as one signal among
+                many.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted">Add your weight and height to see your BMI.</p>
           )}
-          {(!profile.weight || !profile.height) && (
-            <p className="text-blue-700 dark:text-blue-300">
-              Complete your weight and height information to get BMI insights.
-            </p>
-          )}
-        </div>
+        </section>
       </div>
-    </div>
+    </Page>
   );
 };
 

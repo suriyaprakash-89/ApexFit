@@ -2,29 +2,36 @@
 import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 
+// Module-level guard: StrictMode runs effects twice, but we only want one listener.
+let authSubscription = null;
+
 export const useAuthStore = create((set) => ({
   user: null,
   session: null,
   loading: true, // Start with loading = true
 
-  // --- NEW INITIALIZATION FUNCTION ---
+  // Called once on app startup (App.jsx)
   initializeSession: () => {
+    if (authSubscription) return;
+
     // 1. Get the current session immediately
     supabase.auth.getSession().then(({ data: { session } }) => {
       // Set user and session, and set loading to false after the first check
-      set({ user: session?.user ?? null, session: session ?? null, loading: false });
+      set({
+        user: session?.user ?? null,
+        session: session ?? null,
+        loading: false,
+      });
     });
 
     // 2. Set up a listener for future auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       // When auth state changes, update both user and session.
-      set({ user: session?.user ?? null, session: session ?? null });
+      set({ user: session?.user ?? null, session: session ?? null, loading: false });
     });
-
-    // Return the unsubscribe function for cleanup
-    return () => {
-      subscription.unsubscribe();
-    };
+    authSubscription = subscription;
   },
 
   signUp: async (email, password, userData) => {
@@ -53,7 +60,7 @@ export const useAuthStore = create((set) => ({
     if (error) {
       if (error.message.includes("Email not confirmed")) {
         throw new Error(
-          "Please check your email to confirm your account before logging in."
+          "Please check your email to confirm your account before logging in.",
         );
       }
       throw error;
@@ -65,7 +72,7 @@ export const useAuthStore = create((set) => ({
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: `${window.location.origin}/dashboard`,
       },
     });
     if (error) throw error;
@@ -73,6 +80,14 @@ export const useAuthStore = create((set) => ({
   },
 
   signOut: async () => {
+    // Don't leave cached health data behind on shared devices
+    try {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith("apexfit-dashboard-"))
+        .forEach((k) => localStorage.removeItem(k));
+    } catch {
+      // storage unavailable
+    }
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.error("Error signing out:", error);
@@ -89,6 +104,12 @@ export const useAuthStore = create((set) => ({
     return data;
   },
 
+  updatePassword: async (password) => {
+    const { data, error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+    return data;
+  },
+
   resendConfirmation: async (email) => {
     const { data, error } = await supabase.auth.resend({
       type: "signup",
@@ -101,5 +122,3 @@ export const useAuthStore = create((set) => ({
     return data;
   },
 }));
-
-// This part is removed from here. We will call initializeSession from App.jsx

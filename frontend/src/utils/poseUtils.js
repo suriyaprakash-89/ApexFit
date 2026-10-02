@@ -92,21 +92,11 @@ export function checkPlank(keypoints, feedbackCallback) {
 }
 
 // --- Drawing Utilities ---
-const keypointConnections = [
-  // Define connections between keypoints to draw a skeleton
-  { start: "left_ear", end: "right_ear" },
-  { start: "left_shoulder", end: "right_shoulder" },
-  // ... add more connections as needed for a full skeleton
-];
-
-// In frontend/src/utils/poseUtils.js
-
 export function drawSkeleton(keypoints, ctx) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  const keypointColor = "blue";
-  const linkColor = "red"; // FIX #1: Corrected the typo
+  const keypointColor = "#22d3ee";
+  const linkColor = "#a3e635";
 
-  // --- START: NEW CODE TO DRAW SKELETON LINES ---
   const keypointConnections = [
     // Torso
     ["left_shoulder", "right_shoulder"],
@@ -144,17 +134,16 @@ export function drawSkeleton(keypoints, ctx) {
       ctx.moveTo(startPoint.x, startPoint.y);
       ctx.lineTo(endPoint.x, endPoint.y);
       ctx.strokeStyle = linkColor;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 4;
       ctx.stroke();
     }
   }
-  // --- END: NEW CODE ---
 
   // Draw keypoints (dots) on top of the lines
   keypoints.forEach((point) => {
     if (point.score > 0.3) {
       ctx.beginPath();
-      ctx.arc(point.x, point.y, 5, 0, 2 * Math.PI);
+      ctx.arc(point.x, point.y, 6, 0, 2 * Math.PI);
       ctx.fillStyle = keypointColor;
       ctx.fill();
     }

@@ -1,106 +1,98 @@
 // frontend/src/store/notificationStore.js
+// Single owner of notification state + realtime (NotificationCenter only renders it).
 import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 import toast from "react-hot-toast";
+import { localDate } from "../utils/date";
+import { getGoalTarget } from "../utils/goals";
+
+let channel = null;
 
 export const useNotificationStore = create((set, get) => ({
   notifications: [],
-  reminders: [],
+  loading: false,
 
-  fetchNotifications: async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return;
-
+  fetchNotifications: async (userId) => {
+    if (!userId) return;
+    set({ loading: true });
     try {
       const { data, error } = await supabase
         .from("notifications")
         .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(30);
       if (error) throw error;
       set({ notifications: data || [] });
     } catch (error) {
       console.error("Error fetching notifications:", error);
+    } finally {
+      set({ loading: false });
     }
   },
 
-  addReminder: async (reminderData) => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("User not authenticated");
-
-      const { data, error } = await supabase
-        .from("reminders")
-        .insert([{ ...reminderData, user_id: user.id }])
-        .select();
-
-      if (error) throw error;
-
-      set((state) => ({
-        reminders: [data[0], ...state.reminders],
-      }));
-
-      // Show notification
-      toast.success(reminderData.message);
-
-      return data[0];
-    } catch (error) {
-      console.error("Error adding reminder:", error);
-      throw error;
-    }
+  startRealtime: (userId) => {
+    if (!userId || channel) return;
+    channel = supabase
+      .channel(`notifications-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
+        (payload) => set((state) => ({ notifications: [payload.new, ...state.notifications] }))
+      )
+      .subscribe();
   },
 
-  checkWaterReminder: async () => {
+  stopRealtime: () => {
+    if (channel) {
+      supabase.removeChannel(channel);
+      channel = null;
+    }
+    set({ notifications: [] });
+  },
+
+  markAsRead: async (id) => {
+    set((state) => ({
+      notifications: state.notifications.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
+    }));
+    const { error } = await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    if (error) console.error("Error marking notification as read:", error);
+  },
+
+  markAllAsRead: async (userId) => {
+    const unreadIds = get().notifications.filter((n) => !n.is_read).map((n) => n.id);
+    if (!unreadIds.length) return;
+    set((state) => ({ notifications: state.notifications.map((n) => ({ ...n, is_read: true })) }));
+    const { error } = await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .in("id", unreadIds)
+      .eq("user_id", userId);
+    if (error) console.error("Error marking all as read:", error);
+  },
+
+  /** Hourly nudge if the user is well behind on water (respects their settings). */
+  checkWaterReminder: async (userId) => {
+    if (!userId) return;
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+      const [{ data: settingsRow }, { data: waterRow }, { data: goals }] = await Promise.all([
+        supabase.from("user_settings").select("settings").eq("user_id", userId).maybeSingle(),
+        supabase.from("water").select("amount").eq("user_id", userId).eq("date", localDate()).maybeSingle(),
+        supabase.from("goals").select("goal_type, target_value").eq("user_id", userId).eq("goal_type", "water"),
+      ]);
+      const settings = settingsRow?.settings || {};
+      if (settings.notifications === false || settings.water_reminders === false) return;
 
-      const today = new Date().toISOString().split("T")[0];
-      const { data: waterData } = await supabase
-        .from("water")
-        .select("amount")
-        .eq("date", today)
-        .eq("user_id", user.id)
-        .single();
+      const hour = new Date().getHours();
+      if (hour < 8 || hour >= 22) return; // no reminders at night
 
-      if (!waterData || waterData.amount < 4) {
-        // Send reminder if less than 4 glasses today
-        get().addReminder({
-          type: "water",
-          message:
-            "💧 Remember to drink water! You should aim for 8 glasses today.",
-          scheduled_time: new Date().toISOString(),
-          is_completed: false,
-        });
+      const goal = getGoalTarget(goals, "water");
+      const amount = waterRow?.amount || 0;
+      if (amount < goal / 2) {
+        toast(`💧 Time for some water! You've had ${amount} of ${goal} glasses today.`, { duration: 6000 });
       }
     } catch (error) {
       console.error("Error checking water reminder:", error);
-    }
-  },
-
-  markAsRead: async (notificationId) => {
-    try {
-      const { error } = await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .eq("id", notificationId);
-
-      if (error) throw error;
-
-      set((state) => ({
-        notifications: state.notifications.filter(
-          (n) => n.id !== notificationId
-        ),
-      }));
-    } catch (error) {
-      console.error("Error marking notification as read:", error);
     }
   },
 }));

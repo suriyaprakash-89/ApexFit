@@ -1,174 +1,88 @@
 // frontend/src/App.jsx
-import React, { useEffect } from "react";
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
+import React, { Suspense, lazy, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 
-import Navbar from "./components/Layout/Navbar";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Profile from "./pages/Profile";
-import Activities from "./pages/Activities";
-import Goals from "./pages/Goals";
-import AdminPanel from "./pages/AdminPanel";
 import ProtectedRoute from "./components/Auth/ProtectedRoute";
 import PublicRoute from "./components/Auth/PublicRoute";
 import LoadingSpinner from "./components/UI/LoadingSpinner";
-import { useNotificationStore } from "./store/notificationStore";
-import Steps from "./pages/Steps";
-import Sleep from "./pages/Sleep";
-import Settings from "./pages/Settings";
-import { ThemeProvider } from "./contexts/ThemeContext";
 import ThemeAwareToaster from "./components/UI/ThemeAwareToaster";
+import ConfirmDialog from "./components/UI/ConfirmDialog";
+import AppShell from "./components/Layout/AppShell";
 
-import DashboardLayout from "./components/Layout/DashboardLayout";
-import Overview from "./pages/Overview";
-import AICoach from "./pages/AICoach";
-import Challenges from "./pages/Challenges";
-import Insights from "./pages/Insights";
-import ARFitness from "./pages/ARFitness";
+// Every page is its own chunk, so heavy pages (AR/TensorFlow, charts) only
+// download when they are opened.
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const Overview = lazy(() => import("./pages/Overview"));
+const Activities = lazy(() => import("./pages/Activities"));
+const Steps = lazy(() => import("./pages/Steps"));
+const Sleep = lazy(() => import("./pages/Sleep"));
+const Goals = lazy(() => import("./pages/Goals"));
+const AICoach = lazy(() => import("./pages/AICoach"));
+const Challenges = lazy(() => import("./pages/Challenges"));
+const Insights = lazy(() => import("./pages/Insights"));
+const ARFitness = lazy(() => import("./pages/ARFitness"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Settings = lazy(() => import("./pages/Settings"));
+const AdminPanel = lazy(() => import("./pages/AdminPanel"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 function App() {
-  const { user, loading, initializeSession } = useAuthStore(); // Get initializeSession
-  const { fetchNotifications, checkWaterReminder } = useNotificationStore();
+  const { loading, initializeSession } = useAuthStore();
 
-  // --- UPDATED: Call initializeSession only once on app startup ---
+  // Start the auth session listener once on app startup
   useEffect(() => {
     initializeSession();
   }, [initializeSession]);
 
-  useEffect(() => {
-    if (user) {
-      fetchNotifications();
-      const interval = setInterval(checkWaterReminder, 3600000);
-      return () => clearInterval(interval);
-    }
-  }, [user, fetchNotifications, checkWaterReminder]);
-
-  // This loading check is now the main gatekeeper for the entire app.
-  // Nothing will render until the initial session check is complete.
+  // Nothing renders until the initial session check is complete.
   if (loading) {
     return <LoadingSpinner />;
   }
 
   return (
-    <ThemeProvider>
-      <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
-        <Router>
-          {user && <Navbar />}
-          <main
-            className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 dark:scrollbar-thumb-gray-600 dark:scrollbar-track-gray-800 ${
-              user ? "pt-16" : ""
-            }`}
-          >
-            <Routes>
-              <Route
-                path="/login"
-                element={
-                  <PublicRoute>
-                    <Login />
-                  </PublicRoute>
-                }
-              />
-              <Route
-                path="/register"
-                element={
-                  <PublicRoute>
-                    <Register />
-                  </PublicRoute>
-                }
-              />
+    <Router>
+      <Suspense fallback={<LoadingSpinner />}>
+        <Routes>
+          {/* Signed-out pages */}
+          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+          <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+          {/* Reached from the email link with a temporary recovery session */}
+          <Route path="/reset-password" element={<ResetPassword />} />
 
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <DashboardLayout />
-                  </ProtectedRoute>
-                }
-              >
-                <Route path="overview" element={<Overview />} />
-                <Route path="ai-coach" element={<AICoach />} />
-                <Route path="challenges" element={<Challenges />} />
-                <Route path="insights" element={<Insights />} />
-                <Route path="ar-fitness" element={<ARFitness />} />
-                <Route
-                  index
-                  element={<Navigate to="/dashboard/overview" replace />}
-                />
-              </Route>
+          {/* Signed-in app: one shell (sidebar / bottom nav) for every page */}
+          <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
+            <Route path="/dashboard" element={<Overview />} />
+            <Route path="/activities" element={<Activities />} />
+            <Route path="/steps" element={<Steps />} />
+            <Route path="/sleep" element={<Sleep />} />
+            <Route path="/goals" element={<Goals />} />
+            <Route path="/coach" element={<AICoach />} />
+            <Route path="/challenges" element={<Challenges />} />
+            <Route path="/insights" element={<Insights />} />
+            <Route path="/ar-fitness" element={<ARFitness />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
 
-              <Route
-                path="/"
-                element={<Navigate to="/dashboard/overview" replace />}
-              />
-
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRoute>
-                    <Profile />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/activities"
-                element={
-                  <ProtectedRoute>
-                    <Activities />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/goals"
-                element={
-                  <ProtectedRoute>
-                    <Goals />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute adminOnly>
-                    <AdminPanel />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/steps"
-                element={
-                  <ProtectedRoute>
-                    <Steps />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/sleep"
-                element={
-                  <ProtectedRoute>
-                    <Sleep />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <Settings />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </main>
-          <ThemeAwareToaster />
-        </Router>
-      </div>
-    </ThemeProvider>
+          {/* Old URLs keep working */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard/overview" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard/ai-coach" element={<Navigate to="/coach" replace />} />
+          <Route path="/dashboard/challenges" element={<Navigate to="/challenges" replace />} />
+          <Route path="/dashboard/insights" element={<Navigate to="/insights" replace />} />
+          <Route path="/dashboard/ar-fitness" element={<Navigate to="/ar-fitness" replace />} />
+        </Routes>
+      </Suspense>
+      <ConfirmDialog />
+      <ThemeAwareToaster />
+    </Router>
   );
 }
 

@@ -1,117 +1,89 @@
 // frontend/src/store/challengeStore.js
 import { create } from "zustand";
 import { supabase } from "../lib/supabase";
-import { useAuthStore } from "./authStore";
-
-const apiUrl = import.meta.env.VITE_API_URL;
+import { apiJson } from "../lib/api";
+import { localDate } from "../utils/date";
 
 export const useChallengeStore = create((set, get) => ({
-  publicChallenges: [],
+  availableChallenges: [],
   userChallenges: [],
   leaderboard: [],
   loading: true,
+  error: null,
 
   // Fetches all data for the challenges page
   fetchChallengeData: async () => {
-    set({ loading: true });
+    set({ loading: get().availableChallenges.length === 0, error: null });
     try {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("User not found");
+        data: { session },
+      } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) throw new Error("User not found");
 
-      const today = new Date().toISOString().split("T")[0];
+      const today = localDate();
 
-      const [publicChallengesRes, userChallengesRes, leaderboardRes] =
-        await Promise.all([
-          // 1. Get all public challenges that are currently active
-          supabase
-            .from("challenges")
-            .select("*")
-            .eq("is_public", true)
-            .gte("end_date", today),
+      const [challengesRes, userChallengesRes, leaderboardRes] = await Promise.all([
+        // Active challenges: public ones plus the user's own (private AI-generated) ones
+        supabase
+          .from("challenges")
+          .select("*")
+          .or(`is_public.eq.true,created_by.eq.${userId}`)
+          .gte("end_date", today)
+          .order("created_at", { ascending: false }),
 
-          // 2. Get the challenges the current user has joined
-          supabase
-            .from("user_challenges")
-            .select("*, challenges(*)") // Also fetch the details of the challenge
-            .eq("user_id", user.id)
-            .eq("completed", false),
+        // Challenges the current user has joined
+        supabase
+          .from("user_challenges")
+          .select("*, challenges(*)")
+          .eq("user_id", userId)
+          .eq("completed", false),
 
-          // 3. Get the top 3 users by points
-          supabase
-            .from("profiles")
-            .select("id, name, points, avatar_url")
-            .order("points", { ascending: false })
-            .limit(3),
-        ]);
+        // Top users by points
+        supabase
+          .from("profiles")
+          .select("id, name, points, avatar_url")
+          .order("points", { ascending: false })
+          .limit(5),
+      ]);
+
+      if (challengesRes.error) throw challengesRes.error;
 
       set({
-        publicChallenges: publicChallengesRes.data || [],
-        userChallenges: userChallengesRes.data || [],
+        availableChallenges: challengesRes.data || [],
+        userChallenges: (userChallengesRes.data || []).filter((uc) => uc.challenges),
         leaderboard: leaderboardRes.data || [],
         loading: false,
       });
     } catch (error) {
       console.error("Error fetching challenge data:", error);
-      set({ loading: false });
+      set({ loading: false, error: "Couldn't load challenges." });
     }
   },
 
-  // Function to let a user join a challenge
   joinChallenge: async (challengeId) => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("User not found");
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) throw new Error("User not found");
 
-      // Use upsert to prevent joining the same challenge twice
-      const { error } = await supabase.from("user_challenges").upsert({
-        user_id: user.id,
-        challenge_id: challengeId,
-      });
+    // Upsert on the unique (user_id, challenge_id) pair so joining twice is harmless
+    const { error } = await supabase
+      .from("user_challenges")
+      .upsert({ user_id: userId, challenge_id: challengeId }, { onConflict: "user_id,challenge_id" });
+    if (error) throw error;
 
-      if (error) throw error;
-
-      // Refresh the data to show the user's newly joined challenge
-      await get().fetchChallengeData();
-      return true;
-    } catch (error) {
-      console.error("Error joining challenge:", error);
-      return false;
-    }
+    await get().fetchChallengeData();
+    return true;
   },
+
   generateAIChallenge: async () => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not authenticated");
-
-      const response = await fetch(`${apiUrl}/api/ai/generate-challenge`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to generate challenge from server.");
-      }
-
-      const newChallenge = await response.json();
-
-      // Add the new challenge to the start of the public list to make it visible
-      set((state) => ({
-        publicChallenges: [newChallenge, ...state.publicChallenges],
-      }));
-
-      return newChallenge;
-    } catch (error) {
-      console.error("Error generating AI challenge:", error);
-      throw error; // Re-throw to be caught by toast.promise
-    }
+    const newChallenge = await apiJson("/api/ai/generate-challenge", {
+      method: "POST",
+      body: JSON.stringify({ clientDate: localDate() }),
+    });
+    set((state) => ({ availableChallenges: [newChallenge, ...state.availableChallenges] }));
+    return newChallenge;
   },
 }));

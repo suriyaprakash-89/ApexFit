@@ -1,8 +1,10 @@
 // frontend/src/pages/Login.jsx
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Github } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
 import toast from "react-hot-toast";
+import { AuthLayout, PasswordInput, GoogleIcon } from "../components/Auth/AuthLayout";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -10,17 +12,17 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { signIn, signInWithProvider } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      await signIn(email, password);
-      toast.success("Logged in successfully!");
-      navigate("/");
+      await signIn(email.trim(), password);
+      toast.success("Welcome back!");
+      navigate(location.state?.from || "/dashboard", { replace: true });
     } catch (error) {
-      console.error("Login error:", error);
       toast.error(error.message);
     } finally {
       setLoading(false);
@@ -31,100 +33,86 @@ const Login = () => {
     try {
       await signInWithProvider(provider);
     } catch (error) {
-      console.error("Social login error:", error);
       toast.error(error.message);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <AuthLayout
+      title="Sign in"
+      subtitle="Welcome back! Let's keep your streak going."
+      footer={
+        <>
+          Don't have an account?{" "}
+          <Link to="/register" className="font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400">
+            Sign up
+          </Link>
+        </>
+      }
+    >
+      <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-            Sign in to your account
-          </h2>
+          <label htmlFor="email" className="label">
+            Email
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            required
+            className="input-field"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <input
-                id="email-address"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-700"
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-700"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            >
-              {loading ? "Signing in..." : "Sign in"}
-            </button>
-          </div>
-
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300 dark:border-gray-600" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400">
-                  Or continue with
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => handleSocialLogin("google")}
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
-              >
-                <span>Google</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSocialLogin("github")}
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
-              >
-                <span>GitHub</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="text-center">
+        <div>
+          <PasswordInput
+            id="password"
+            name="password"
+            label="Password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <div className="mt-2 text-right">
             <Link
-              to="/register"
-              className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+              to="/forgot-password"
+              className="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
             >
-              Don't have an account? Sign up
+              Forgot password?
             </Link>
           </div>
-        </form>
+        </div>
+
+        <button type="submit" disabled={loading} className="btn-primary w-full">
+          {loading ? "Signing in..." : "Sign in"}
+        </button>
+      </form>
+
+      <div className="relative my-6">
+        <div className="absolute inset-0 flex items-center" aria-hidden="true">
+          <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+        </div>
+        <p className="relative flex justify-center text-sm">
+          <span className="px-3 bg-white dark:bg-gray-800 text-muted">or continue with</span>
+        </p>
       </div>
-    </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <button type="button" onClick={() => handleSocialLogin("google")} className="btn-secondary">
+          <GoogleIcon />
+          Google
+        </button>
+        <button type="button" onClick={() => handleSocialLogin("github")} className="btn-secondary">
+          <Github className="w-5 h-5" aria-hidden="true" />
+          GitHub
+        </button>
+      </div>
+    </AuthLayout>
   );
 };
 

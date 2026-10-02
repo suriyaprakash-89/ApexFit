@@ -13,12 +13,10 @@ const PublicRoute = ({ children }) => {
   }
 
   if (user) {
-    // If the user IS logged in, redirect them away from this public page
-    // to the main dashboard overview.
-    return <Navigate to="/dashboard/overview" replace />;
+    // Signed-in users don't need the login/register pages
+    return <Navigate to="/dashboard" replace />;
   }
 
-  // If the user is NOT logged in, show the requested page (e.g., Login or Register)
   return children;
 };
 

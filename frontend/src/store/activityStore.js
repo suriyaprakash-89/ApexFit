@@ -1,5 +1,53 @@
+// frontend/src/store/activityStore.js
 import { create } from "zustand";
 import { supabase } from "../lib/supabase";
+import { localDate, addDays } from "../utils/date";
+import { runOrQueue, newClientId, isNetworkError } from "./syncStore";
+
+// Last successful dashboard load, so Home still shows something offline
+const snapshotKey = (userId) => `apexfit-dashboard-${userId}`;
+const writeSnapshot = (userId, snapshot) => {
+  try {
+    localStorage.setItem(snapshotKey(userId), JSON.stringify(snapshot));
+  } catch {
+    // ignore: storage full or unavailable
+  }
+};
+const readSnapshot = (userId) => {
+  try {
+    return userId ? JSON.parse(localStorage.getItem(snapshotKey(userId)) || "null") : null;
+  } catch {
+    return null;
+  }
+};
+
+const getUserId = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session?.user?.id ?? null;
+};
+
+/** Date range [start, end] (inclusive, local "YYYY-MM-DD") for a chart period around `anchor`. */
+export const getChartRange = (period, anchor = new Date()) => {
+  const a = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+  switch (period) {
+    case "month":
+      return {
+        start: new Date(a.getFullYear(), a.getMonth(), 1),
+        end: new Date(a.getFullYear(), a.getMonth() + 1, 0),
+      };
+    case "year":
+      return { start: new Date(a.getFullYear(), 0, 1), end: new Date(a.getFullYear(), 11, 31) };
+    case "week":
+    default: {
+      const start = addDays(a, -a.getDay()); // Sunday
+      return { start, end: addDays(start, 6) };
+    }
+  }
+};
+
+let realtimeChannel = null;
 
 export const useActivityStore = create((set, get) => ({
   activities: [],
@@ -7,329 +55,206 @@ export const useActivityStore = create((set, get) => ({
   sleep: [],
   water: [],
   goals: [],
-  chartData: {
-    day: { steps: [], activities: [] },
-    week: { steps: [], activities: [] },
-    month: { steps: [], activities: [] },
-  },
+  dashboardLoading: true,
+  dashboardError: null,
+  chart: { key: null, steps: [], activities: [], loading: true },
 
   fetchDashboardData: async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+      const userId = await getUserId();
+      if (!userId) return;
+      const since = localDate(addDays(new Date(), -6));
 
-      // Fetch all data in parallel
-      const [activitiesRes, stepsRes, sleepRes, waterRes, goalsRes] =
-        await Promise.all([
-          supabase
-            .from("activities")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false })
-            .limit(10),
-          supabase
-            .from("steps")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("date", { ascending: false })
-            .limit(7),
-          supabase
-            .from("sleep")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("date", { ascending: false })
-            .limit(7),
-          supabase
-            .from("water")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("date", { ascending: false })
-            .limit(7),
-          supabase
-            .from("goals")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false }),
-        ]);
+      const [activitiesRes, stepsRes, sleepRes, waterRes, goalsRes] = await Promise.all([
+        supabase
+          .from("activities")
+          .select("*")
+          .eq("user_id", userId)
+          .order("date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(20),
+        supabase.from("steps").select("*").eq("user_id", userId).gte("date", since).order("date", { ascending: false }),
+        supabase.from("sleep").select("*").eq("user_id", userId).gte("date", since).order("date", { ascending: false }),
+        supabase.from("water").select("*").eq("user_id", userId).gte("date", since).order("date", { ascending: false }),
+        supabase.from("goals").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
+      ]);
 
-      set({
+      const firstError = [activitiesRes, stepsRes, sleepRes, waterRes, goalsRes].find((r) => r.error)?.error;
+      if (firstError) throw firstError;
+
+      const snapshot = {
         activities: activitiesRes.data || [],
         steps: stepsRes.data || [],
         sleep: sleepRes.data || [],
         water: waterRes.data || [],
         goals: goalsRes.data || [],
-      });
+      };
+      set({ ...snapshot, dashboardLoading: false, dashboardError: null });
+      writeSnapshot(userId, snapshot);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
+      // Offline (or a hiccup): fall back to the last data synced on this device
+      const userId = await getUserId();
+      const snapshot = get().dashboardLoading ? readSnapshot(userId) : null;
+      set({
+        ...(snapshot || {}),
+        dashboardLoading: false,
+        dashboardError: isNetworkError(error)
+          ? snapshot
+            ? "You're offline. Showing your last synced data."
+            : "You're offline. Connect to load your data."
+          : "Couldn't load your latest data.",
+      });
     }
   },
 
-  fetchChartData: async (period) => {
+  fetchChartData: async (period, anchor = new Date()) => {
+    const { start, end } = getChartRange(period, anchor);
+    const key = `${period}:${localDate(start)}`;
+    set((state) => ({ chart: { ...state.chart, key, loading: true } }));
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const now = new Date();
-      let startDate;
-
-      switch (period) {
-        case "day":
-          startDate = new Date();
-          startDate.setHours(0, 0, 0, 0);
-          break;
-        case "week":
-          startDate = new Date();
-          startDate.setDate(startDate.getDate() - 7);
-          break;
-        case "month":
-          startDate = new Date();
-          startDate.setDate(startDate.getDate() - 30);
-          break;
-        default:
-          startDate = new Date();
-          startDate.setDate(startDate.getDate() - 7);
-      }
-
-      const startDateString = startDate.toISOString().split("T")[0];
+      const userId = await getUserId();
+      if (!userId) return;
 
       const [stepsRes, activitiesRes] = await Promise.all([
         supabase
           .from("steps")
-          .select("*")
-          .eq("user_id", user.id)
-          .gte("date", startDateString)
-          .order("date", { ascending: true }),
+          .select("date, steps")
+          .eq("user_id", userId)
+          .gte("date", localDate(start))
+          .lte("date", localDate(end)),
         supabase
           .from("activities")
-          .select("*")
-          .eq("user_id", user.id)
-          .gte("date", startDateString)
-          .order("date", { ascending: true }),
+          .select("date, calories")
+          .eq("user_id", userId)
+          .gte("date", localDate(start))
+          .lte("date", localDate(end)),
       ]);
 
-      set((state) => ({
-        chartData: {
-          ...state.chartData,
-          [period]: {
-            steps: stepsRes.data || [],
-            activities: activitiesRes.data || [],
-          },
-        },
-      }));
+      // Ignore responses for a period the user has already navigated away from
+      if (get().chart.key !== key) return;
+      set({
+        chart: { key, steps: stepsRes.data || [], activities: activitiesRes.data || [], loading: false },
+      });
     } catch (error) {
       console.error("Error fetching chart data:", error);
+      if (get().chart.key === key) set((state) => ({ chart: { ...state.chart, loading: false } }));
     }
   },
 
-  // --- NEW UNIFIED FUNCTION FOR LOGGING ACTIVITIES AND UPDATING GOALS ---
-  logActivityAndUpdateGoals: async (activityData) => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("User not authenticated");
+  /**
+   * Save an activity and bump the calories goal progress. Works offline: the
+   * client-generated id makes a later replay idempotent. Returns { activity, queued }.
+   */
+  logActivity: async (activityData) => {
+    const userId = await getUserId();
+    if (!userId) throw new Error("User not authenticated");
 
-      // Step 1: Insert the new activity (e.g., a 'run' with calories, or a 'walk' with steps)
-      const { data: newActivity, error: insertError } = await supabase
-        .from("activities")
-        .insert([{ ...activityData, user_id: user.id }])
-        .select()
-        .single();
+    const activity = { ...activityData, id: newClientId(), user_id: userId };
+    const { queued } = await runOrQueue({ kind: "upsert", table: "activities", payload: activity, onConflict: "id" });
 
-      if (insertError) throw insertError;
-
-      console.log("Activity logged:", newActivity);
-      set((state) => ({ activities: [newActivity, ...state.activities] }));
-
-      // Step 2: After logging, call the database function to update relevant goals.
-      // We check for both 'calories' and 'steps' as an activity might contribute to either.
-
-      // Update calories goal if calories were logged
-      if (newActivity.calories && newActivity.calories > 0) {
-        const { error: rpcError } = await supabase.rpc(
-          "increment_goal_progress",
-          {
-            user_id_input: user.id,
-            activity_type: "calories",
-            value_added: newActivity.calories,
-          }
-        );
-        if (rpcError) console.error("Error updating calories goal:", rpcError);
+    if (activity.calories > 0) {
+      try {
+        await runOrQueue({
+          kind: "rpc",
+          fn: "increment_goal_progress",
+          payload: { user_id_input: userId, activity_type: "calories", value_added: activity.calories },
+        });
+      } catch (rpcError) {
+        console.warn("Could not update calories goal:", rpcError.message);
       }
-
-      // Update steps goal if steps were logged (assuming steps are part of the activity data)
-      if (newActivity.steps && newActivity.steps > 0) {
-        const { error: rpcError } = await supabase.rpc(
-          "increment_goal_progress",
-          {
-            user_id_input: user.id,
-            activity_type: "steps",
-            value_added: newActivity.steps,
-          }
-        );
-        if (rpcError) console.error("Error updating steps goal:", rpcError);
-      }
-
-      // Step 3: Refresh all data to show the latest progress everywhere
-      await get().fetchDashboardData();
-
-      return newActivity;
-    } catch (error) {
-      console.error("Error in logActivityAndUpdateGoals:", error);
-      throw error;
     }
-  },
 
-  // This function is kept for backwards compatibility but now just calls the new one.
-  addActivity: async (activityData) => {
-    return get().logActivityAndUpdateGoals(activityData);
-  },
-
-  addWaterIntake: async (glassesToAdd) => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("User not authenticated");
-
-      const today = new Date().toISOString().split("T")[0];
-
-      const { data: existingEntry } = await supabase
-        .from("water")
-        .select("amount")
-        .eq("user_id", user.id)
-        .eq("date", today)
-        .single();
-
-      const currentAmount = existingEntry?.amount || 0;
-      const newAmount = currentAmount + glassesToAdd;
-
-      const { data, error } = await supabase
-        .from("water")
-        .upsert(
-          {
-            amount: newAmount,
-            date: today,
-            user_id: user.id,
-          },
-          { onConflict: "user_id,date" }
-        )
-        .select();
-
-      if (error) throw error;
-
-      set((state) => ({
-        water: [data[0], ...state.water.filter((w) => w.date !== today)],
-      }));
-
-      return data[0];
-    } catch (error) {
-      console.error("Error adding water intake:", error);
-      throw error;
+    if (queued) {
+      // Show it right away; it syncs when the connection returns
+      set((state) => ({ activities: [{ ...activity, pending: true }, ...state.activities] }));
+    } else {
+      get().fetchDashboardData();
     }
+    return { activity, queued };
   },
 
   setWaterIntake: async (glasses) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("User not authenticated");
-      const today = new Date().toISOString().split("T")[0];
+    const userId = await getUserId();
+    if (!userId) throw new Error("User not authenticated");
+    const today = localDate();
+    const row = { amount: glasses, date: today, user_id: userId };
 
-      const { data, error } = await supabase
-        .from("water")
-        .upsert({ amount: glasses, date: today, user_id: user.id }, { onConflict: "user_id,date" })
-        .select();
-        
-      if (error) throw error;
-      set((state) => ({ water: [data[0], ...state.water.filter((w) => w.date !== today)] }));
-      return data[0];
-    } catch (error) {
-      console.error("Error setting water intake:", error);
-      throw error;
-    }
+    const { data, queued } = await runOrQueue({ kind: "upsert", table: "water", payload: row, onConflict: "user_id,date" });
+    set((state) => ({ water: [data || row, ...state.water.filter((w) => w.date !== today)] }));
+    return { data, queued };
   },
 
-  setupRealtime: () => {
-    const user = supabase.auth.getUser();
-    if (!user) return;
-
-    const subscription = supabase
-      .channel("activities-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "activities",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          console.log("Realtime update:", payload);
-          get().fetchDashboardData();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
+  addWaterIntake: async (glassesToAdd) => {
+    const today = localDate();
+    const current = get().water.find((w) => w.date === today)?.amount || 0;
+    return get().setWaterIntake(current + glassesToAdd);
   },
 
   updateGoal: async (goalType, newGoalValue) => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("User not authenticated");
+    const userId = await getUserId();
+    if (!userId) throw new Error("User not authenticated");
 
-      const { data: existingGoal } = await supabase
+    const { data: existingGoal } = await supabase
+      .from("goals")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("goal_type", goalType)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // A new or changed target starts its progress from zero.
+    if (existingGoal) {
+      const { error } = await supabase
         .from("goals")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("goal_type", goalType)
-        .single();
+        .update({
+          target_value: newGoalValue,
+          current_value: 0,
+          achieved: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existingGoal.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("goals").insert([
+        { user_id: userId, goal_type: goalType, target_value: newGoalValue, current_value: 0, achieved: false },
+      ]);
+      if (error) throw error;
+    }
 
-      // THE FIX IS HERE: When creating or updating a goal, its current_value must be 0.
-      const newCurrentValue = 0;
+    await get().fetchDashboardData();
+  },
 
-      if (existingGoal) {
-        const { error } = await supabase
-          .from("goals")
-          .update({
-            target_value: newGoalValue,
-            current_value: newCurrentValue, // Reset progress on goal update
-            achieved: false, // Reset achieved status
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existingGoal.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("goals").insert([
-          {
-            user_id: user.id,
-            goal_type: goalType,
-            target_value: newGoalValue,
-            current_value: newCurrentValue, // Always start new goals at 0
-            achieved: false,
-          },
-        ]);
-        if (error) throw error;
-      }
+  /** One realtime channel per signed-in user; call stopRealtime on sign-out. */
+  startRealtime: (userId) => {
+    if (!userId || realtimeChannel) return;
+    realtimeChannel = supabase
+      .channel(`activities-${userId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "activities", filter: `user_id=eq.${userId}` },
+        () => get().fetchDashboardData()
+      )
+      .subscribe();
+  },
 
-      get().fetchDashboardData();
-    } catch (error) {
-      console.error("Error updating goal:", error);
-      throw error;
+  stopRealtime: () => {
+    if (realtimeChannel) {
+      supabase.removeChannel(realtimeChannel);
+      realtimeChannel = null;
     }
   },
-}));
 
-supabase.auth.onAuthStateChange((event, session) => {
-  if (event === "SIGNED_IN") {
-    useActivityStore.getState().setupRealtime();
-  }
-});
+  reset: () =>
+    set({
+      activities: [],
+      steps: [],
+      sleep: [],
+      water: [],
+      goals: [],
+      dashboardLoading: true,
+      dashboardError: null,
+      chart: { key: null, steps: [], activities: [], loading: true },
+    }),
+}));

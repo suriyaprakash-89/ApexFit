@@ -1,78 +1,198 @@
 // frontend/src/components/AI/FitnessDNAReport.jsx
-import React from "react";
-import { useTheme } from "../../contexts/ThemeContext"; // Add this import
+// 30-day "Fitness DNA" report: ratings are computed from real data on the server,
+// the AI writes the summary/notes/recommendations (cached once per day).
+import React, { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  Activity,
+  Moon,
+  Droplets,
+  CalendarCheck,
+  HeartPulse,
+  RefreshCw,
+  Sparkles,
+  Lightbulb,
+  BarChart3,
+} from "lucide-react";
+import toast from "react-hot-toast";
+import { apiJson, withClientDate } from "../../lib/api";
+import EmptyState from "../UI/EmptyState";
+import { SkeletonCard, SkeletonStatGrid } from "../UI/Skeleton";
+import { formatDate } from "../../utils/date";
+
+const DIMENSIONS = [
+  { key: "activity", label: "Activity", icon: Activity },
+  { key: "sleep", label: "Sleep", icon: Moon },
+  { key: "hydration", label: "Hydration", icon: Droplets },
+  { key: "consistency", label: "Consistency", icon: CalendarCheck },
+  { key: "recovery", label: "Recovery", icon: HeartPulse },
+];
+
+const RATING_STYLES = {
+  Excellent: "text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900/40",
+  Good: "text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40",
+  Average: "text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/40",
+  "Needs Improvement": "text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-900/40",
+  "Not enough data": "text-gray-700 bg-gray-100 dark:text-gray-300 dark:bg-gray-700",
+};
+
+const fmt = (value, digits = 0) =>
+  value == null ? "–" : Number(value).toLocaleString(undefined, { maximumFractionDigits: digits });
 
 const FitnessDNAReport = () => {
-  const { isDark } = useTheme(); // Add this line
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Mock fitness data
-  const fitnessData = {
-    activityLevel: "Moderate",
-    sleepQuality: "Good",
-    hydration: "Needs Improvement",
-    recovery: "Average",
-    consistency: "Excellent",
-  };
+  const load = useCallback(async (refresh = false) => {
+    refresh ? setRefreshing(true) : setLoading(true);
+    setError(null);
+    try {
+      const data = await apiJson(`/api/ai/insights?${withClientDate(refresh ? { refresh: "1" } : {})}`);
+      setReport(data);
+      if (refresh) toast.success("Insights refreshed");
+    } catch (err) {
+      if (refresh) toast.error(err.message);
+      else setError(err.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (loading) {
+    return (
+      <div className="space-y-6" role="status" aria-label="Loading insights">
+        <SkeletonCard lines={3} />
+        <SkeletonStatGrid />
+        <SkeletonCard lines={4} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="card">
+        <EmptyState
+          icon={BarChart3}
+          title="Couldn't load your insights"
+          description={error}
+          action={
+            <button onClick={() => load()} className="btn-primary">
+              Try again
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (report?.empty) {
+    return (
+      <div className="card">
+        <EmptyState
+          icon={Sparkles}
+          title="Your Fitness DNA needs some data"
+          description="Log steps, sleep, water or a workout and your personalised 30-day report will appear here."
+          action={
+            <Link to="/activities?new=1" className="btn-primary">
+              Log an activity
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
+  const p = report.period;
+  const stats = [
+    { label: "Avg daily steps", value: fmt(p.avgSteps), sub: `${p.daysWithSteps} days logged` },
+    { label: "Workouts", value: fmt(p.workouts), sub: `${fmt(p.totalActiveMinutes)} active min` },
+    { label: "Avg sleep", value: p.avgSleepHours == null ? "–" : `${fmt(p.avgSleepHours, 1)} h`, sub: `${p.nightsLogged} nights logged` },
+    { label: "Avg water", value: p.avgWaterGlasses == null ? "–" : `${fmt(p.avgWaterGlasses, 1)}`, sub: `glasses · goal ${report.goals.water}` },
+  ];
 
   return (
-    <div className="card bg-white dark:bg-gray-800 rounded-xl p-6 shadow-md fade-in">
-      {" "}
-      {/* Added dark:bg-gray-800 */}
-      <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
-        Fitness DNA Report
-      </h3>{" "}
-      {/* Added dark:text-white */}
-      <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg mb-4">
-        {" "}
-        {/* Added dark:bg-purple-900/20 */}
-        <p className="text-purple-800 dark:text-purple-200">
-          {" "}
-          {/* Added dark:text-purple-200 */}
-          Your personalized fitness insights based on your activity patterns
+    <div className="space-y-6">
+      <section className="card bg-gradient-to-br from-primary-600 to-teal-600 !border-0 text-white">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5" aria-hidden="true" />
+            <h2 className="text-lg font-semibold">Your last 30 days</h2>
+          </div>
+          <button
+            onClick={() => load(true)}
+            disabled={refreshing}
+            className="btn min-h-[36px] px-3 bg-white/15 hover:bg-white/25 text-white"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+        <p className="mt-3 text-white/90 leading-relaxed">
+          {report.summary ||
+            "Here's how your activity, sleep and hydration have looked over the last month."}
         </p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {Object.entries(fitnessData).map(([key, value]) => (
-          <div key={key} className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-            {" "}
-            {/* Added dark:bg-gray-700 */}
-            <h4 className="font-medium text-gray-800 dark:text-gray-200 capitalize">
-              {" "}
-              {/* Added dark:text-gray-200 */}
-              {key.replace(/([A-Z])/g, " $1")}
-            </h4>
-            <p
-              className={`mt-2 text-lg font-semibold ${
-                value === "Excellent"
-                  ? "text-green-600 dark:text-green-400" // Added dark:text-green-400
-                  : value === "Good"
-                  ? "text-blue-600 dark:text-blue-400" // Added dark:text-blue-400
-                  : value === "Average"
-                  ? "text-yellow-600 dark:text-yellow-400" // Added dark:text-yellow-400
-                  : "text-red-600 dark:text-red-400" // Added dark:text-red-400
-              }`}
-            >
-              {value}
-            </p>
+        <p className="mt-3 text-xs text-white/70">
+          {report.aiGenerated ? "Written by your AI coach from your logs" : "Based on your logs"} · updated{" "}
+          {formatDate(report.generatedFor, { month: "short", day: "numeric" })}
+        </p>
+      </section>
+
+      <section aria-label="30-day stats" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+        {stats.map((s) => (
+          <div key={s.label} className="card !p-4 sm:!p-5">
+            <p className="text-sm text-muted">{s.label}</p>
+            <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{s.value}</p>
+            <p className="text-xs text-muted mt-0.5">{s.sub}</p>
           </div>
         ))}
-      </div>
-      <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-        {" "}
-        {/* Added dark:bg-blue-900/20 */}
-        <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">
-          Recommendations
-        </h4>{" "}
-        {/* Added dark:text-blue-200 */}
-        <ul className="list-disc list-inside text-blue-700 dark:text-blue-300 space-y-1">
-          {" "}
-          {/* Added dark:text-blue-300 */}
-          <li>Increase water intake to at least 8 glasses daily</li>
-          <li>Maintain your excellent workout consistency</li>
-          <li>Consider adding stretching to improve recovery</li>
-          <li>Try to go to bed at the same time each night</li>
-        </ul>
-      </div>
+      </section>
+
+      <section aria-label="Ratings" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {DIMENSIONS.map(({ key, label, icon: Icon }) => {
+          const rating = report.scores?.[key] || "Not enough data";
+          return (
+            <div key={key} className="card">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Icon className="w-5 h-5 text-primary-600 dark:text-primary-400" aria-hidden="true" />
+                  <h3 className="font-semibold text-gray-900 dark:text-white">{label}</h3>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${RATING_STYLES[rating] || RATING_STYLES["Not enough data"]}`}>
+                  {rating}
+                </span>
+              </div>
+              {report.notes?.[key] && <p className="mt-3 text-sm text-muted">{report.notes[key]}</p>}
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="card">
+        <div className="flex items-center gap-2 mb-4">
+          <Lightbulb className="w-5 h-5 text-amber-500" aria-hidden="true" />
+          <h2 className="card-title">Recommendations</h2>
+        </div>
+        <ol className="space-y-3">
+          {report.recommendations.map((rec, i) => (
+            <li key={rec} className="flex gap-3">
+              <span className="shrink-0 w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-xs font-bold flex items-center justify-center">
+                {i + 1}
+              </span>
+              <span className="text-sm text-gray-700 dark:text-gray-300">{rec}</span>
+            </li>
+          ))}
+        </ol>
+        <Link to="/coach" className="btn-soft mt-5">
+          Discuss with your coach
+        </Link>
+      </section>
     </div>
   );
 };

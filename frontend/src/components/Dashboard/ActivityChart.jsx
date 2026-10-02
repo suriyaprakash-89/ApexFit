@@ -1,242 +1,124 @@
 // frontend/src/components/Dashboard/ActivityChart.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
-  Title,
   Tooltip,
   Legend,
+  Filler,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
-import { useActivityStore } from "../../store/activityStore";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useActivityStore, getChartRange } from "../../store/activityStore";
+import { useTheme } from "../../contexts/ThemeContext";
+import { parseLocalDate } from "../../utils/date";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler);
+
+const PERIODS = [
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+  { value: "year", label: "Year" },
+];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const shiftAnchor = (anchor, period, direction) => {
+  const d = new Date(anchor);
+  if (period === "week") d.setDate(d.getDate() + 7 * direction);
+  if (period === "month") d.setMonth(d.getMonth() + direction, 1);
+  if (period === "year") d.setFullYear(d.getFullYear() + direction, 0, 1);
+  return d;
+};
+
+/** Bucket rows into the chart's x-axis slots (day of week / day of month / month). */
+const bucketize = (period, start, end, steps, activities) => {
+  let size;
+  let indexOf;
+  let labels;
+  if (period === "week") {
+    size = 7;
+    indexOf = (d) => d.getDay();
+    labels = WEEKDAYS;
+  } else if (period === "month") {
+    size = end.getDate();
+    indexOf = (d) => d.getDate() - 1;
+    labels = Array.from({ length: size }, (_, i) => String(i + 1));
+  } else {
+    size = 12;
+    indexOf = (d) => d.getMonth();
+    labels = MONTHS;
+  }
+
+  const stepsData = Array(size).fill(0);
+  const caloriesData = Array(size).fill(0);
+  steps.forEach((row) => {
+    const i = indexOf(parseLocalDate(row.date));
+    if (i >= 0 && i < size) stepsData[i] += row.steps || 0;
+  });
+  activities.forEach((row) => {
+    const i = indexOf(parseLocalDate(row.date));
+    if (i >= 0 && i < size) caloriesData[i] += row.calories || 0;
+  });
+  return { labels, stepsData, caloriesData };
+};
 
 const ActivityChart = ({ defaultPeriod = "week" }) => {
-  const { chartData, fetchChartData } = useActivityStore();
-  const [selectedPeriod, setSelectedPeriod] = useState(defaultPeriod);
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const { chart, fetchChartData } = useActivityStore();
+  const { isDark } = useTheme();
+  const [period, setPeriod] = useState(defaultPeriod);
+  const [anchor, setAnchor] = useState(() => new Date());
+
+  const { start, end } = getChartRange(period, anchor);
+  const isCurrentRange = end >= new Date(new Date().setHours(0, 0, 0, 0));
 
   useEffect(() => {
-    fetchChartData(selectedPeriod);
-  }, [selectedPeriod, fetchChartData]);
+    fetchChartData(period, anchor);
+  }, [period, anchor, fetchChartData]);
 
-  const periodData = chartData[selectedPeriod] || { steps: [], activities: [] };
+  const { labels, stepsData, caloriesData } = useMemo(
+    () => bucketize(period, start, end, chart.steps, chart.activities),
+    // start/end derive from period + anchor
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [period, anchor, chart.steps, chart.activities]
+  );
 
-  const handlePeriodChange = (period) => {
-    setSelectedPeriod(period);
-    setIsDropdownOpen(false);
-    setCurrentDate(new Date());
-  };
-
-  const navigateDate = (direction) => {
-    const newDate = new Date(currentDate);
-
-    switch (selectedPeriod) {
-      case "week":
-        newDate.setDate(newDate.getDate() + (direction === "next" ? 7 : -7));
-        break;
-      case "month":
-        newDate.setMonth(newDate.getMonth() + (direction === "next" ? 1 : -1));
-        break;
-      case "year":
-        newDate.setFullYear(
-          newDate.getFullYear() + (direction === "next" ? 1 : -1)
-        );
-        break;
-      default:
-        break;
+  const rangeLabel = (() => {
+    if (period === "week") {
+      const fmt = { month: "short", day: "numeric" };
+      return `${start.toLocaleDateString(undefined, fmt)} – ${end.toLocaleDateString(undefined, fmt)}`;
     }
+    if (period === "month") return start.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    return String(start.getFullYear());
+  })();
 
-    setCurrentDate(newDate);
-  };
-
-  const getDateRangeText = () => {
-    switch (selectedPeriod) {
-      case "week":
-        const startOfWeek = new Date(currentDate);
-        startOfWeek.setDate(currentDate.getDate() - currentDate.getDay()); // Start from Sunday
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-        return `${startOfWeek.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        })} - ${endOfWeek.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        })}`;
-
-      case "month":
-        return currentDate.toLocaleDateString("en-US", {
-          month: "long",
-          year: "numeric",
-        });
-
-      case "year":
-        return currentDate.getFullYear().toString();
-
-      default:
-        return "";
-    }
-  };
-
-  // Generate labels for the chart
-  const generateLabels = () => {
-    switch (selectedPeriod) {
-      case "week":
-        return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-      case "month":
-        // Show weeks 1-4 for monthly view
-        return ["Week 1", "Week 2", "Week 3", "Week 4"];
-
-      case "year":
-        return [
-          "Jan",
-          "Feb",
-          "Mar",
-          "Apr",
-          "May",
-          "Jun",
-          "Jul",
-          "Aug",
-          "Sep",
-          "Oct",
-          "Nov",
-          "Dec",
-        ];
-
-      default:
-        return [];
-    }
-  };
-
-  // Process data and fill missing days with 0
-  const processChartData = () => {
-    const { steps, activities } = periodData;
-
-    switch (selectedPeriod) {
-      case "week":
-        // Always return 7 days (Sunday to Saturday)
-        const weekData = {
-          steps: Array(7).fill(0),
-          calories: Array(7).fill(0),
-        };
-
-        // Get current week's Sunday date
-        const today = new Date();
-        const sunday = new Date(today);
-        sunday.setDate(today.getDate() - today.getDay());
-
-        // Fill in available data for the current week
-        steps.forEach((step) => {
-          const stepDate = new Date(step.date);
-          const dayOfWeek = stepDate.getDay(); // 0 = Sunday, 6 = Saturday
-          if (dayOfWeek >= 0 && dayOfWeek <= 6) {
-            weekData.steps[dayOfWeek] = step.steps || 0;
-          }
-        });
-
-        activities.forEach((activity) => {
-          const activityDate = new Date(activity.date);
-          const dayOfWeek = activityDate.getDay();
-          if (dayOfWeek >= 0 && dayOfWeek <= 6) {
-            weekData.calories[dayOfWeek] =
-              (weekData.calories[dayOfWeek] || 0) + (activity.calories || 0);
-          }
-        });
-
-        return weekData;
-
-      case "month":
-        // Group by week for monthly view (4 weeks)
-        const monthlyData = {
-          steps: Array(4).fill(0),
-          calories: Array(4).fill(0),
-        };
-
-        steps.forEach((step) => {
-          const stepDate = new Date(step.date);
-          const weekOfMonth = Math.min(
-            Math.floor((stepDate.getDate() - 1) / 7),
-            3
-          );
-          monthlyData.steps[weekOfMonth] += step.steps || 0;
-        });
-
-        activities.forEach((activity) => {
-          const activityDate = new Date(activity.date);
-          const weekOfMonth = Math.min(
-            Math.floor((activityDate.getDate() - 1) / 7),
-            3
-          );
-          monthlyData.calories[weekOfMonth] += activity.calories || 0;
-        });
-
-        return monthlyData;
-
-      case "year":
-        // Group by month for yearly view (12 months)
-        const yearlyData = {
-          steps: Array(12).fill(0),
-          calories: Array(12).fill(0),
-        };
-
-        steps.forEach((step) => {
-          const stepDate = new Date(step.date);
-          const month = stepDate.getMonth();
-          yearlyData.steps[month] += step.steps || 0;
-        });
-
-        activities.forEach((activity) => {
-          const activityDate = new Date(activity.date);
-          const month = activityDate.getMonth();
-          yearlyData.calories[month] += activity.calories || 0;
-        });
-
-        return yearlyData;
-
-      default:
-        return {
-          steps: Array(7).fill(0),
-          calories: Array(7).fill(0),
-        };
-    }
-  };
-
-  const labels = generateLabels();
-  const chartDataValues = processChartData();
+  const textColor = isDark ? "#d1d5db" : "#4b5563";
+  const gridColor = isDark ? "rgba(75, 85, 99, 0.4)" : "rgba(229, 231, 235, 1)";
 
   const data = {
     labels,
     datasets: [
       {
         label: "Steps",
-        data: chartDataValues.steps,
+        data: stepsData,
+        yAxisID: "y",
         borderColor: "rgb(59, 130, 246)",
-        backgroundColor: "rgba(59, 130, 246, 0.5)",
-        tension: 0.4,
+        backgroundColor: "rgba(59, 130, 246, 0.12)",
+        fill: true,
+        tension: 0.35,
+        pointRadius: period === "month" ? 2 : 3,
       },
       {
-        label: "Calories",
-        data: chartDataValues.calories,
-        borderColor: "rgb(239, 68, 68)",
-        backgroundColor: "rgba(239, 68, 68, 0.5)",
-        tension: 0.4,
+        label: "Active calories",
+        data: caloriesData,
+        yAxisID: "y1",
+        borderColor: "rgb(249, 115, 22)",
+        backgroundColor: "rgba(249, 115, 22, 0.5)",
+        tension: 0.35,
+        pointRadius: period === "month" ? 2 : 3,
       },
     ],
   };
@@ -244,104 +126,99 @@ const ActivityChart = ({ defaultPeriod = "week" }) => {
   const options = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
     plugins: {
-      legend: {
-        position: "top",
-      },
-      title: {
-        display: false,
-      },
+      legend: { position: "bottom", labels: { color: textColor, usePointStyle: true, boxWidth: 8 } },
       tooltip: {
         callbacks: {
-          label: function (context) {
-            let label = context.dataset.label || "";
-            if (label) {
-              label += ": ";
-            }
-            if (context.parsed.y !== null) {
-              label += context.parsed.y.toLocaleString();
-            }
-            return label;
-          },
+          label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y).toLocaleString()}`,
         },
       },
     },
     scales: {
+      x: { ticks: { color: textColor, maxRotation: 0, autoSkip: true }, grid: { display: false } },
       y: {
         beginAtZero: true,
-        ticks: {
-          callback: function (value) {
-            return value.toLocaleString();
-          },
-        },
+        position: "left",
+        ticks: { color: textColor, callback: (v) => Number(v).toLocaleString() },
+        grid: { color: gridColor },
+        title: { display: true, text: "Steps", color: textColor },
+      },
+      y1: {
+        beginAtZero: true,
+        position: "right",
+        ticks: { color: textColor, callback: (v) => Number(v).toLocaleString() },
+        grid: { drawOnChartArea: false },
+        title: { display: true, text: "Calories", color: textColor },
       },
     },
   };
 
+  const hasData = stepsData.some(Boolean) || caloriesData.some(Boolean);
+
   return (
     <div className="h-full flex flex-col">
-      {/* Custom Header with Dropdown and Navigation */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-2">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Activity Overview
-          </h3>
-
-          {/* Period Dropdown */}
-          <div className="relative">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h2 className="card-title">Activity overview</h2>
+        <div
+          role="tablist"
+          aria-label="Chart period"
+          className="inline-flex p-1 rounded-xl bg-gray-100 dark:bg-gray-700"
+        >
+          {PERIODS.map((p) => (
             <button
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="flex items-center space-x-1 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              key={p.value}
+              role="tab"
+              aria-selected={period === p.value}
+              onClick={() => {
+                setPeriod(p.value);
+                setAnchor(new Date());
+              }}
+              className={`px-3 min-h-[36px] rounded-lg text-sm font-medium transition-colors ${
+                period === p.value
+                  ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm"
+                  : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+              }`}
             >
-              <span className="capitalize">{selectedPeriod}</span>
-              <Calendar className="w-4 h-4" />
+              {p.label}
             </button>
-
-            {isDropdownOpen && (
-              <div className="absolute top-full left-0 mt-1 w-32 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-10">
-                {["week", "month", "year"].map((period) => (
-                  <button
-                    key={period}
-                    onClick={() => handlePeriodChange(period)}
-                    className={`w-full text-left px-3 py-2 text-sm capitalize hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                      selectedPeriod === period
-                        ? "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
-                        : "text-gray-700 dark:text-gray-300"
-                    }`}
-                  >
-                    {period}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Date Navigation */}
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-600 dark:text-gray-400">
-            {getDateRangeText()}
-          </span>
-          <div className="flex space-x-1">
-            <button
-              onClick={() => navigateDate("prev")}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => navigateDate("next")}
-              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* Chart Container */}
-      <div className="flex-1 min-h-[300px]">
-        <Line data={data} options={options} />
+      <div className="flex items-center justify-between mb-3">
+        <button
+          onClick={() => setAnchor((a) => shiftAnchor(a, period, -1))}
+          className="icon-btn"
+          aria-label={`Previous ${period}`}
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300" aria-live="polite">
+          {rangeLabel}
+        </p>
+        <button
+          onClick={() => setAnchor((a) => shiftAnchor(a, period, 1))}
+          disabled={isCurrentRange}
+          className="icon-btn"
+          aria-label={`Next ${period}`}
+        >
+          <ChevronRight className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="relative flex-1 min-h-[260px] sm:min-h-[300px]">
+        <Line data={data} options={options} aria-label={`Steps and active calories, ${rangeLabel}`} role="img" />
+        {chart.loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-gray-800/60 rounded-xl">
+            <div className="skeleton w-24 h-3" />
+          </div>
+        )}
+        {!chart.loading && !hasData && (
+          <p className="absolute inset-0 flex items-center justify-center text-sm text-muted pointer-events-none">
+            No steps or workouts logged in this period.
+          </p>
+        )}
       </div>
     </div>
   );

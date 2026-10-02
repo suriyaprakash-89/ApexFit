@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview --host",
-    "tailwind:build": "tailwindcss -i ./src/index.css -o ./dist/output.css --watch"
+    "preview": "vite preview --host"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.38.0",
@@ -19,6 +18,7 @@
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.4.1",
+    "react-markdown": "^9.1.0",
     "react-router-dom": "^6.20.1",
     "tailwind-scrollbar": "^3.0.0",
     "zustand": "^4.4.7"

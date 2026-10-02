@@ -1,5 +1,5 @@
 // frontend/src/contexts/ThemeContext.jsx
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 const ThemeContext = createContext();
 
@@ -11,91 +11,62 @@ export const useTheme = () => {
   return context;
 };
 
+const THEMES = ["light", "dark", "system"];
+const mediaQuery = () => window.matchMedia("(prefers-color-scheme: dark)");
+
+const readSavedTheme = () => {
+  try {
+    const saved = localStorage.getItem("theme");
+    return THEMES.includes(saved) ? saved : "system";
+  } catch {
+    return "system";
+  }
+};
+
+const applyTheme = (dark) => {
+  const html = document.documentElement;
+  html.classList.toggle("dark", dark);
+  html.classList.toggle("light", !dark);
+  html.style.colorScheme = dark ? "dark" : "light";
+};
+
 export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState("system"); // 'light', 'dark', or 'system'
-  const [isInitialized, setIsInitialized] = useState(false);
+  // Read synchronously so the first render already matches the class set in index.html
+  const [theme, setTheme] = useState(readSavedTheme); // 'light', 'dark', or 'system'
+  const [systemDark, setSystemDark] = useState(() => mediaQuery().matches);
 
   useEffect(() => {
-    const initializeTheme = () => {
-      const savedTheme = localStorage.getItem("theme") || "system";
-      setTheme(savedTheme);
-      applyTheme(savedTheme);
-      setIsInitialized(true);
-    };
+    const mq = mediaQuery();
+    const handleChange = (e) => setSystemDark(e.matches);
+    mq.addEventListener("change", handleChange);
+    return () => mq.removeEventListener("change", handleChange);
+  }, []);
 
-    initializeTheme();
+  const isDark = theme === "dark" || (theme === "system" && systemDark);
 
-    // Listen for system theme changes
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleSystemThemeChange = (e) => {
-      if (theme === "system") {
-        applyTheme("system");
-      }
-    };
+  useEffect(() => {
+    applyTheme(isDark);
+  }, [isDark]);
 
-    mediaQuery.addEventListener("change", handleSystemThemeChange);
-
-    return () => {
-      mediaQuery.removeEventListener("change", handleSystemThemeChange);
-    };
-  }, [theme]);
-
-  const applyTheme = (themeToApply) => {
-    const html = document.documentElement;
-    html.classList.remove("light", "dark");
-
-    if (themeToApply === "system") {
-      const systemPrefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      ).matches;
-      if (systemPrefersDark) {
-        html.classList.add("dark");
-      } else {
-        html.classList.add("light");
-      }
-    } else {
-      html.classList.add(themeToApply);
-    }
-  };
-
-  const changeTheme = (newTheme) => {
+  const changeTheme = useCallback((newTheme) => {
+    if (!THEMES.includes(newTheme)) return;
     setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    applyTheme(newTheme);
-  };
-
-  // Simple toggle function for the navbar
-  const toggleTheme = () => {
-    if (theme === "system") {
-      // If system mode, toggle to the opposite of system preference
-      const systemPrefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      ).matches;
-      const newTheme = systemPrefersDark ? "light" : "dark";
-      changeTheme(newTheme);
-    } else {
-      // If already light or dark, just toggle between them
-      const newTheme = theme === "light" ? "dark" : "light";
-      changeTheme(newTheme);
+    try {
+      localStorage.setItem("theme", newTheme);
+    } catch {
+      // Storage can be unavailable (private mode); the theme still applies for this session.
     }
-  };
+  }, []);
 
-  const isDark = () => {
-    if (theme === "system") {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    }
-    return theme === "dark";
-  };
-
-  const value = {
-    theme,
-    changeTheme,
-    toggleTheme,
-    isDark: isDark(),
-    isInitialized,
-  };
+  // Simple toggle for the nav bar: flip whatever is currently visible
+  const toggleTheme = useCallback(
+    () => changeTheme(isDark ? "light" : "dark"),
+    [changeTheme, isDark]
+  );
 
   return (
-    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+    <ThemeContext.Provider value={{ theme, changeTheme, toggleTheme, isDark }}>
+      {children}
+    </ThemeContext.Provider>
   );
 };

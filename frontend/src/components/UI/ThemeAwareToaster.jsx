@@ -7,9 +7,11 @@ const ThemeAwareToaster = () => {
 
   return (
     <Toaster
-      position="top-right"
+      position="top-center"
+      containerStyle={{ top: "max(16px, env(safe-area-inset-top))" }}
       toastOptions={{
         style: {
+          borderRadius: "12px",
           background: isDark ? "#374151" : "#fff",
           color: isDark ? "#fff" : "#374151",
           boxShadow: isDark

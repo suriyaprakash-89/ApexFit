@@ -1,103 +1,118 @@
 // frontend/src/pages/Activities.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Plus, Pencil, Trash2, Activity } from "lucide-react";
+import toast from "react-hot-toast";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
-import toast from "react-hot-toast";
-import { Plus, Edit, Trash2, Activity } from "lucide-react";
+import { useActivityStore } from "../store/activityStore";
+import { confirmDialog } from "../store/confirmStore";
+import { offlineSavedToast } from "../store/syncStore";
+import Page from "../components/UI/Page";
+import Modal from "../components/UI/Modal";
+import EmptyState from "../components/UI/EmptyState";
+import { Skeleton } from "../components/UI/Skeleton";
+import { ACTIVITY_TYPES, activityEmoji } from "../utils/goals";
+import { localDate, formatDate } from "../utils/date";
+
+const emptyForm = () => ({
+  type: "running",
+  duration: "",
+  calories: "",
+  distance: "",
+  notes: "",
+  date: localDate(),
+});
 
 const Activities = () => {
   const { user } = useAuthStore();
+  const { logActivity, fetchDashboardData } = useActivityStore();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activities, setActivities] = useState([]);
-  const [showForm, setShowForm] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [showForm, setShowForm] = useState(searchParams.get("new") === "1");
   const [editingActivity, setEditingActivity] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState(emptyForm);
 
-  const [formData, setFormData] = useState({
-    type: "running",
-    duration: "",
-    calories: "",
-    distance: "",
-    notes: "",
-    date: new Date().toISOString().split("T")[0],
-  });
-
-  useEffect(() => {
-    fetchActivities();
-  }, [user]);
-
-  const fetchActivities = async () => {
+  const fetchActivities = useCallback(async () => {
     if (!user) return;
-
     try {
       const { data, error } = await supabase
         .from("activities")
         .select("*")
         .eq("user_id", user.id)
-        .order("date", { ascending: false });
-
+        .order("date", { ascending: false })
+        .order("created_at", { ascending: false });
       if (error) throw error;
       setActivities(data || []);
     } catch (error) {
       console.error("Error fetching activities:", error);
-      toast.error("Failed to load activities");
+      if (navigator.onLine) toast.error("Failed to load activities");
+    } finally {
+      setInitialLoading(false);
     }
+  }, [user]);
+
+  useEffect(() => {
+    fetchActivities();
+  }, [fetchActivities]);
+
+  // "Log activity" buttons elsewhere link here with ?new=1
+  const wantsNew = searchParams.get("new") === "1";
+  useEffect(() => {
+    if (wantsNew) setShowForm(true);
+  }, [wantsNew]);
+
+  const openNew = () => {
+    setEditingActivity(null);
+    setFormData(emptyForm());
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingActivity(null);
+    setFormData(emptyForm());
+    if (searchParams.has("new")) setSearchParams({}, { replace: true });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setSaving(true);
+    const payload = {
+      type: formData.type,
+      duration: parseInt(formData.duration, 10),
+      calories: parseInt(formData.calories, 10),
+      distance: formData.distance ? parseFloat(formData.distance) : null,
+      notes: formData.notes.trim() || null,
+      date: formData.date,
+    };
 
     try {
       if (editingActivity) {
-        // Update existing activity
-        const { error } = await supabase
-          .from("activities")
-          .update({
-            type: formData.type,
-            duration: parseInt(formData.duration),
-            calories: parseInt(formData.calories),
-            distance: formData.distance ? parseFloat(formData.distance) : null,
-            notes: formData.notes,
-            date: formData.date,
-          })
-          .eq("id", editingActivity.id);
-
+        const { error } = await supabase.from("activities").update(payload).eq("id", editingActivity.id);
         if (error) throw error;
-        toast.success("Activity updated successfully!");
+        fetchDashboardData();
+        toast.success("Activity updated");
       } else {
-        // Create new activity
-        const { error } = await supabase.from("activities").insert([
-          {
-            user_id: user.id,
-            type: formData.type,
-            duration: parseInt(formData.duration),
-            calories: parseInt(formData.calories),
-            distance: formData.distance ? parseFloat(formData.distance) : null,
-            notes: formData.notes,
-            date: formData.date,
-          },
-        ]);
-
-        if (error) throw error;
-        toast.success("Activity added successfully!");
+        const { activity, queued } = await logActivity(payload);
+        if (queued) {
+          // Offline: show it now, it syncs automatically later
+          setActivities((prev) => [{ ...activity, pending: true }, ...prev]);
+          offlineSavedToast();
+          closeForm();
+          return;
+        }
+        toast.success("Activity added. Nice work! 💪");
       }
-
-      setShowForm(false);
-      setEditingActivity(null);
-      setFormData({
-        type: "running",
-        duration: "",
-        calories: "",
-        distance: "",
-        notes: "",
-        date: new Date().toISOString().split("T")[0],
-      });
+      closeForm();
       fetchActivities();
     } catch (error) {
       console.error("Error saving activity:", error);
       toast.error("Failed to save activity");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -105,8 +120,8 @@ const Activities = () => {
     setEditingActivity(activity);
     setFormData({
       type: activity.type,
-      duration: activity.duration.toString(),
-      calories: activity.calories.toString(),
+      duration: String(activity.duration),
+      calories: String(activity.calories),
       distance: activity.distance?.toString() || "",
       notes: activity.notes || "",
       date: activity.date,
@@ -114,274 +129,234 @@ const Activities = () => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm("Are you sure you want to delete this activity?")) return;
+  const handleDelete = async (activity) => {
+    const ok = await confirmDialog({
+      title: "Delete activity?",
+      message: `This ${activity.type} session from ${formatDate(activity.date)} will be removed permanently.`,
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
 
     try {
-      const { error } = await supabase.from("activities").delete().eq("id", id);
-
+      const { error } = await supabase.from("activities").delete().eq("id", activity.id);
       if (error) throw error;
-      toast.success("Activity deleted successfully!");
-      fetchActivities();
+      setActivities((prev) => prev.filter((a) => a.id !== activity.id));
+      fetchDashboardData();
+      toast.success("Activity deleted");
     } catch (error) {
       console.error("Error deleting activity:", error);
       toast.error("Failed to delete activity");
     }
   };
 
-  const activityTypes = [
-    { value: "running", label: "Running", emoji: "🏃‍♂️" },
-    { value: "walking", label: "Walking", emoji: "🚶‍♂️" },
-    { value: "cycling", label: "Cycling", emoji: "🚴‍♂️" },
-    { value: "swimming", label: "Swimming", emoji: "🏊‍♂️" },
-    { value: "gym", label: "Gym", emoji: "💪" },
-    { value: "yoga", label: "Yoga", emoji: "🧘‍♂️" },
-    { value: "other", label: "Other", emoji: "🏅" },
-  ];
+  const field = (key) => ({
+    value: formData[key],
+    onChange: (e) => setFormData({ ...formData, [key]: e.target.value }),
+  });
+
+  const RowActions = ({ activity }) =>
+    activity.pending ? (
+      <span className="text-xs font-medium text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/40 px-2.5 py-1 rounded-full">
+        Waiting to sync
+      </span>
+    ) : (
+    <div className="flex gap-1">
+      <button
+        onClick={() => handleEdit(activity)}
+        className="icon-btn"
+        aria-label={`Edit ${activity.type} on ${formatDate(activity.date)}`}
+      >
+        <Pencil className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => handleDelete(activity)}
+        className="icon-btn hover:!text-red-600 dark:hover:!text-red-400"
+        aria-label={`Delete ${activity.type} on ${formatDate(activity.date)}`}
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+    </div>
+  );
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
-          Activities
-        </h1>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Activity
+    <Page
+      title="Activities"
+      icon={Activity}
+      subtitle="Every workout you've logged"
+      actions={
+        <button onClick={openNew} className="btn-primary">
+          <Plus className="w-5 h-5" aria-hidden="true" />
+          Add activity
         </button>
-      </div>
-
-      {showForm && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">
-            {editingActivity ? "Edit Activity" : "Add New Activity"}
-          </h2>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Activity Type
-                </label>
-                <select
-                  value={formData.type}
-                  onChange={(e) =>
-                    setFormData({ ...formData, type: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                  required
-                >
-                  {activityTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.emoji} {type.label}
-                    </option>
-                  ))}
-                </select>
+      }
+    >
+      <div className="card !p-0 overflow-hidden">
+        {initialLoading ? (
+          <div className="p-5 space-y-4" aria-hidden="true">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="w-10 h-10 rounded-xl" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-1/3" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, date: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Duration (minutes)
-                </label>
-                <input
-                  type="number"
-                  value={formData.duration}
-                  onChange={(e) =>
-                    setFormData({ ...formData, duration: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                  required
-                  min="1"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Calories Burned
-                </label>
-                <input
-                  type="number"
-                  value={formData.calories}
-                  onChange={(e) =>
-                    setFormData({ ...formData, calories: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                  required
-                  min="1"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Distance (km) - Optional
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={formData.distance}
-                  onChange={(e) =>
-                    setFormData({ ...formData, distance: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Notes
-              </label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) =>
-                  setFormData({ ...formData, notes: e.target.value })
-                }
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                placeholder="Any additional notes about your activity..."
-              />
-            </div>
-
-            <div className="flex justify-end space-x-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingActivity(null);
-                  setFormData({
-                    type: "running",
-                    duration: "",
-                    calories: "",
-                    distance: "",
-                    notes: "",
-                    date: new Date().toISOString().split("T")[0],
-                  });
-                }}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loading
-                  ? "Saving..."
-                  : editingActivity
-                  ? "Update Activity"
-                  : "Add Activity"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
-        {activities.length === 0 ? (
-          <div className="text-center py-12">
-            <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 dark:text-gray-400">
-              No activities recorded yet.
-            </p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Add Your First Activity
-            </button>
+            ))}
           </div>
+        ) : activities.length === 0 ? (
+          <EmptyState
+            icon={Activity}
+            title="No activities recorded yet"
+            description="Log a run, ride, gym session or yoga class to start building your history."
+            action={
+              <button onClick={openNew} className="btn-primary">
+                Add your first activity
+              </button>
+            }
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-700">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Activity
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Duration
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Calories
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {activities.map((activity) => {
-                  const activityType = activityTypes.find(
-                    (t) => t.value === activity.type
-                  );
-                  return (
-                    <tr key={activity.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <span className="text-xl mr-2">
-                            {activityType?.emoji}
-                          </span>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
-                            {activity.type}
-                          </span>
-                        </div>
+          <>
+            {/* Phones: cards */}
+            <ul className="sm:hidden divide-y divide-gray-200 dark:divide-gray-700">
+              {activities.map((activity) => (
+                <li key={activity.id} className="flex items-center gap-3 p-4">
+                  <span className="text-2xl" aria-hidden="true">
+                    {activityEmoji(activity.type)}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 dark:text-white capitalize">{activity.type}</p>
+                    <p className="text-sm text-muted">
+                      {formatDate(activity.date, { month: "short", day: "numeric" })} · {activity.duration} min ·{" "}
+                      {activity.calories} cal
+                    </p>
+                  </div>
+                  <RowActions activity={activity} />
+                </li>
+              ))}
+            </ul>
+
+            {/* Tablet & desktop: table */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                  <tr>
+                    <th scope="col" className="table-head">Activity</th>
+                    <th scope="col" className="table-head">Date</th>
+                    <th scope="col" className="table-head">Duration</th>
+                    <th scope="col" className="table-head">Calories</th>
+                    <th scope="col" className="table-head">Distance</th>
+                    <th scope="col" className="table-head"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {activities.map((activity) => (
+                    <tr key={activity.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                      <td className="table-cell">
+                        <span className="text-xl mr-2" aria-hidden="true">
+                          {activityEmoji(activity.type)}
+                        </span>
+                        <span className="font-medium capitalize">{activity.type}</span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {new Date(activity.date).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {activity.duration} min
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {activity.calories} cal
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleEdit(activity)}
-                            className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(activity.id)}
-                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                      <td className="table-cell">{formatDate(activity.date)}</td>
+                      <td className="table-cell">{activity.duration} min</td>
+                      <td className="table-cell">{activity.calories} cal</td>
+                      <td className="table-cell">{activity.distance ? `${activity.distance} km` : "–"}</td>
+                      <td className="table-cell text-right">
+                        <RowActions activity={activity} />
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
-    </div>
+
+      <Modal
+        isOpen={showForm}
+        onClose={closeForm}
+        title={editingActivity ? "Edit activity" : "Add activity"}
+        size="max-w-xl"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <fieldset>
+            <legend className="label">Activity type</legend>
+            <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+              {ACTIVITY_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, type: type.value })}
+                  aria-pressed={formData.type === type.value}
+                  className={`flex flex-col items-center justify-center gap-1 min-h-[64px] rounded-xl border text-xs font-medium transition-colors ${
+                    formData.type === type.value
+                      ? "border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                      : "border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  }`}
+                >
+                  <span className="text-xl" aria-hidden="true">
+                    {type.emoji}
+                  </span>
+                  {type.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="act-duration" className="label">
+                Duration (min)
+              </label>
+              <input id="act-duration" type="number" inputMode="numeric" min="1" max="1440" required className="input-field" {...field("duration")} />
+            </div>
+            <div>
+              <label htmlFor="act-calories" className="label">
+                Calories burned
+              </label>
+              <input id="act-calories" type="number" inputMode="numeric" min="0" max="10000" required className="input-field" {...field("calories")} />
+            </div>
+            <div>
+              <label htmlFor="act-distance" className="label">
+                Distance (km) <span className="font-normal text-muted">optional</span>
+              </label>
+              <input id="act-distance" type="number" inputMode="decimal" step="0.1" min="0" className="input-field" {...field("distance")} />
+            </div>
+            <div>
+              <label htmlFor="act-date" className="label">
+                Date
+              </label>
+              <input id="act-date" type="date" max={localDate()} required className="input-field" {...field("date")} />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="act-notes" className="label">
+              Notes <span className="font-normal text-muted">optional</span>
+            </label>
+            <textarea
+              id="act-notes"
+              rows={3}
+              maxLength={500}
+              className="input-field"
+              placeholder="How did it feel?"
+              {...field("notes")}
+            />
+          </div>
+
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
+            <button type="button" onClick={closeForm} className="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="btn-primary">
+              {saving ? "Saving..." : editingActivity ? "Save changes" : "Add activity"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </Page>
   );
 };
 

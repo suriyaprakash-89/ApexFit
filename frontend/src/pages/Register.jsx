@@ -3,6 +3,9 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import toast from "react-hot-toast";
+import { AuthLayout, PasswordInput } from "../components/Auth/AuthLayout";
+
+const MIN_PASSWORD = 8;
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -19,41 +22,36 @@ const Register = () => {
   const navigate = useNavigate();
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
+
+  const passwordTooShort = formData.password.length > 0 && formData.password.length < MIN_PASSWORD;
+  const mismatch = formData.confirmPassword.length > 0 && formData.password !== formData.confirmPassword;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (formData.password.length < MIN_PASSWORD) {
+      toast.error(`Password must be at least ${MIN_PASSWORD} characters long`);
+      return;
+    }
     if (formData.password !== formData.confirmPassword) {
       toast.error("Passwords do not match");
       return;
     }
 
-    if (formData.password.length < 6) {
-      toast.error("Password must be at least 6 characters long");
-      return;
-    }
-
     setLoading(true);
-
     try {
-      await signUp(formData.email, formData.password, {
-        name: formData.name,
+      await signUp(formData.email.trim(), formData.password, {
+        name: formData.name.trim(),
         age: formData.age || null,
         weight: formData.weight || null,
         height: formData.height || null,
       });
 
-      toast.success(
-        "Account created successfully! Please check your email to verify your account."
-      );
+      toast.success("Account created! Check your email to verify your account.", { duration: 6000 });
       navigate("/login");
     } catch (error) {
-      console.error("Registration error:", error);
       toast.error(error.message);
     } finally {
       setLoading(false);
@@ -61,116 +59,124 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <AuthLayout
+      title="Create your account"
+      subtitle="Track your activity, sleep and hydration, with an AI coach on your side."
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link to="/login" className="font-semibold text-primary-600 hover:text-primary-700 dark:text-primary-400">
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
-            Create your account
-          </h2>
+          <label htmlFor="name" className="label">
+            Full name
+          </label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            required
+            className="input-field"
+            value={formData.name}
+            onChange={handleChange}
+          />
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <input
-                name="name"
-                type="text"
-                required
-                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-700"
-                placeholder="Full Name"
-                value={formData.name}
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <input
-                name="email"
-                type="email"
-                required
-                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-700"
-                placeholder="Email address"
-                value={formData.email}
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <input
-                name="password"
-                type="password"
-                required
-                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-700"
-                placeholder="Password"
-                value={formData.password}
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <input
-                name="confirmPassword"
-                type="password"
-                required
-                className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-700"
-                placeholder="Confirm Password"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <input
-                  name="age"
-                  type="number"
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-700"
-                  placeholder="Age"
-                  value={formData.age}
-                  onChange={handleChange}
-                />
-              </div>
-              <div>
-                <input
-                  name="weight"
-                  type="number"
-                  step="0.1"
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-700"
-                  placeholder="Weight (kg)"
-                  value={formData.weight}
-                  onChange={handleChange}
-                />
-              </div>
-              <div>
-                <input
-                  name="height"
-                  type="number"
-                  step="0.1"
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-700"
-                  placeholder="Height (cm)"
-                  value={formData.height}
-                  onChange={handleChange}
-                />
-              </div>
-            </div>
-          </div>
+        <div>
+          <label htmlFor="email" className="label">
+            Email
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            required
+            className="input-field"
+            placeholder="you@example.com"
+            value={formData.email}
+            onChange={handleChange}
+          />
+        </div>
+        <div>
+          <PasswordInput
+            id="password"
+            name="password"
+            label="Password"
+            autoComplete="new-password"
+            required
+            minLength={MIN_PASSWORD}
+            aria-describedby="password-hint"
+            value={formData.password}
+            onChange={handleChange}
+          />
+          <p
+            id="password-hint"
+            className={`mt-1.5 text-xs ${passwordTooShort ? "text-red-600 dark:text-red-400" : "text-muted"}`}
+          >
+            At least {MIN_PASSWORD} characters.
+          </p>
+        </div>
+        <div>
+          <PasswordInput
+            id="confirmPassword"
+            name="confirmPassword"
+            label="Confirm password"
+            autoComplete="new-password"
+            required
+            aria-invalid={mismatch}
+            aria-describedby={mismatch ? "confirm-error" : undefined}
+            value={formData.confirmPassword}
+            onChange={handleChange}
+          />
+          {mismatch && (
+            <p id="confirm-error" className="mt-1.5 text-xs text-red-600 dark:text-red-400">
+              Passwords don't match.
+            </p>
+          )}
+        </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            >
-              {loading ? "Creating account..." : "Sign up"}
-            </button>
+        <fieldset>
+          <legend className="label">
+            About you <span className="font-normal text-muted">(optional, helps personalise your coach)</span>
+          </legend>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { name: "age", label: "Age", step: "1" },
+              { name: "weight", label: "Weight (kg)", step: "0.1" },
+              { name: "height", label: "Height (cm)", step: "0.1" },
+            ].map((f) => (
+              <div key={f.name}>
+                <label htmlFor={f.name} className="block text-xs text-muted mb-1">
+                  {f.label}
+                </label>
+                <input
+                  id={f.name}
+                  name={f.name}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step={f.step}
+                  className="input-field"
+                  value={formData[f.name]}
+                  onChange={handleChange}
+                />
+              </div>
+            ))}
           </div>
+        </fieldset>
 
-          <div className="text-center">
-            <Link
-              to="/login"
-              className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-            >
-              Already have an account? Sign in
-            </Link>
-          </div>
-        </form>
-      </div>
-    </div>
+        <button type="submit" disabled={loading} className="btn-primary w-full">
+          {loading ? "Creating account..." : "Create account"}
+        </button>
+      </form>
+    </AuthLayout>
   );
 };
 

@@ -1,345 +1,401 @@
-// frontend/src/components/ARFitnessChallenge.jsx
-import React, { useState, useRef, useEffect } from "react";
-import { Camera, Video, Loader, X } from "lucide-react";
-import * as tf from "@tensorflow/tfjs";
-import * as poseDetection from "@tensorflow-models/pose-detection";
+// frontend/src/components/AR/ARFitnessChallenge.jsx
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { Camera, Loader, X, Volume2, VolumeX, Timer, Trophy, Smartphone, CameraOff } from "lucide-react";
 import { checkWallSit, checkPlank, drawSkeleton } from "../../utils/poseUtils";
 import { supabase } from "../../lib/supabase";
 import { useAuthStore } from "../../store/authStore";
 
-const RotateDevicePrompt = () => (
-  <div className="fixed inset-0 bg-gray-900 flex flex-col items-center justify-center z-[100] p-4 text-white text-center landscape:hidden">
-    <svg className="w-24 h-24 mb-4 transform -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2zM5 11h14" />
-    </svg>
-    <h2 className="text-2xl font-bold">Please Rotate Your Device</h2>
-    <p className="mt-2 text-gray-300">For the best experience, please use landscape mode.</p>
-  </div>
-);
+const CHALLENGES = [
+  {
+    id: "wall-sit",
+    name: "Wall Sit Challenge",
+    description: "Hold a seated position against a wall with knees at 90°.",
+    duration: 30,
+    points: 100,
+    check: checkWallSit,
+    requiresLandscape: false,
+    setupTip: "Stand side-on to the camera so your hips, knees and ankles are visible.",
+  },
+  {
+    id: "plank",
+    name: "Plank Challenge",
+    description: "Hold a straight plank from shoulders to ankles.",
+    duration: 45,
+    points: 150,
+    check: checkPlank,
+    requiresLandscape: true,
+    setupTip: "Place the phone on the floor in landscape, side-on to your body.",
+  },
+];
+
+const DETECT_INTERVAL_MS = 100;
 
 const ARFitnessChallenge = () => {
   const { user } = useAuthStore();
-  const [activeChallenge, setActiveChallenge] = useState(null);
+  const [challenge, setChallenge] = useState(null);
+  // phase: setup -> loading -> active -> complete | error
+  const [phase, setPhase] = useState(null);
+  const [feedback, setFeedback] = useState("Get into position…");
+  const [timer, setTimer] = useState(0);
+  const [isPoseCorrect, setIsPoseCorrect] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(true);
+  const [ignoreRotate, setIgnoreRotate] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const detectorRef = useRef(null);
+  const streamRef = useRef(null);
+  const rafRef = useRef(null);
+  const feedbackRef = useRef("");
+  const lastSpokenRef = useRef("");
+  const completedRef = useRef(false);
+  const voiceRef = useRef(voiceOn);
+  voiceRef.current = voiceOn;
 
-  const [feedback, setFeedback] = useState("Get into position...");
-  const [timer, setTimer] = useState(0);
-  const [isPoseCorrect, setIsPoseCorrect] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showSetup, setShowSetup] = useState(false);
-  const [isVideoReady, setIsVideoReady] = useState(false);
-  const [lastSpokenFeedback, setLastSpokenFeedback] = useState("");
+  const speak = useCallback((text) => {
+    if (!voiceRef.current || !("speechSynthesis" in window) || !text || text === lastSpokenRef.current) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.1;
+    window.speechSynthesis.speak(utterance);
+    lastSpokenRef.current = text;
+  }, []);
 
-  const challenges = [
-    {
-      id: 1,
-      name: "Wall Sit Challenge",
-      description: "Maintain a sitting position against a wall",
-      duration: 30,
-      points: 100,
+  const updateFeedback = useCallback(
+    (text) => {
+      if (text === feedbackRef.current) return;
+      feedbackRef.current = text;
+      setFeedback(text);
+      speak(text);
     },
-    {
-      id: 2,
-      name: "Plank Challenge",
-      description: "Hold a straight plank position",
-      duration: 45,
-      points: 150,
+    [speak]
+  );
+
+  const stopCamera = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  }, []);
+
+  const closeChallenge = useCallback(() => {
+    stopCamera();
+    setChallenge(null);
+    setPhase(null);
+    setIsPoseCorrect(false);
+    setTimer(0);
+    setIgnoreRotate(false);
+    lastSpokenRef.current = "";
+    feedbackRef.current = "";
+  }, [stopCamera]);
+
+  // Release the camera and model if the user navigates away mid-challenge
+  useEffect(
+    () => () => {
+      stopCamera();
+      detectorRef.current?.dispose?.();
+      detectorRef.current = null;
     },
-  ];
+    [stopCamera]
+  );
 
-  const speak = (text) => {
-    if (text && text !== lastSpokenFeedback) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.1;
-      window.speechSynthesis.speak(utterance);
-      setLastSpokenFeedback(text);
-    }
-  };
-
-  useEffect(() => {
-    if (activeChallenge && !showSetup && isVideoReady) {
-      speak(feedback);
-    }
-  }, [feedback]);
-
-  const loadPoseDetector = async () => {
-    setIsLoading(true);
-    setFeedback("Initializing AI Model...");
+  const loadDetector = async () => {
+    if (detectorRef.current) return detectorRef.current;
+    // Loaded on demand so TensorFlow (~MBs) is never part of the normal app bundle
+    const [tf, poseDetection] = await Promise.all([
+      import("@tensorflow/tfjs"),
+      import("@tensorflow-models/pose-detection"),
+    ]);
     await tf.ready();
     await tf.setBackend("webgl");
-    if (!detectorRef.current) {
-      setFeedback("Downloading AI Model (first time only)...");
-      const detector = await poseDetection.createDetector(
-        poseDetection.SupportedModels.MoveNet,
-        { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
-      );
-      detectorRef.current = detector;
-    }
-    setIsLoading(false);
-  };
-
-  const startChallengeSetup = (challenge) => {
-    setActiveChallenge(challenge);
-    setShowSetup(true);
+    detectorRef.current = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, {
+      modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+    });
+    return detectorRef.current;
   };
 
   const beginChallenge = async () => {
-    setShowSetup(false);
+    setPhase("loading");
     setTimer(0);
-    setFeedback("Starting camera...");
+    completedRef.current = false;
+    setFeedback("Loading the pose model…");
     try {
-      await loadPoseDetector();
-      // --- FIX: Request a 16:9 widescreen video resolution ---
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720 },
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => {
-          setIsVideoReady(true);
-        };
-      }
+      const [stream] = await Promise.all([
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        }),
+        loadDetector(),
+      ]);
+      streamRef.current = stream;
+      setPhase("active");
     } catch (error) {
-      console.error("Error accessing camera:", error);
-      setFeedback("Camera access denied. Please enable camera permissions.");
-      setActiveChallenge(null);
+      console.error("AR start failed:", error);
+      stopCamera();
+      setErrorMessage(
+        error?.name === "NotAllowedError"
+          ? "Camera access was blocked. Allow camera permission in your browser settings and try again."
+          : error?.name === "NotFoundError"
+          ? "No camera was found on this device."
+          : "Couldn't start the AR challenge on this device."
+      );
+      setPhase("error");
     }
   };
 
+  // Attach the stream once the <video> element is rendered, then start detecting
   useEffect(() => {
-    let detectionInterval;
-    if (isVideoReady) {
-      const initialFeedback = "Get into position...";
-      setFeedback(initialFeedback);
-      speak(initialFeedback);
-      detectionInterval = setInterval(() => {
-        detectPose();
-      }, 100);
-    }
-    return () => clearInterval(detectionInterval);
-  }, [isVideoReady]);
-
-  const detectPose = async () => {
-    if (
-      !detectorRef.current ||
-      !videoRef.current ||
-      videoRef.current.readyState !== 4 ||
-      !activeChallenge
-    )
-      return;
+    if (phase !== "active" || !challenge) return;
     const video = videoRef.current;
-    const poses = await detectorRef.current.estimatePoses(video);
-    const ctx = canvasRef.current.getContext("2d");
-    if (poses && poses.length > 0) {
-      drawSkeleton(poses[0].keypoints, ctx);
-      let correct = false;
-      if (activeChallenge.name === "Wall Sit Challenge") {
-        correct = checkWallSit(poses[0].keypoints, setFeedback);
-      } else if (activeChallenge.name === "Plank Challenge") {
-        correct = checkPlank(poses[0].keypoints, setFeedback);
-      }
-      setIsPoseCorrect(correct);
-    } else {
-      setIsPoseCorrect(false);
-      if (
-        feedback !== "Great form! Hold the pose." &&
-        feedback !== "Perfect plank! Keep your body straight."
-      ) {
-        setFeedback("No person detected. Make sure you are in frame.");
-      }
-    }
-  };
+    if (!video || !streamRef.current) return;
+    video.srcObject = streamRef.current;
 
+    let lastRun = 0;
+    let busy = false;
+
+    const loop = async (now) => {
+      rafRef.current = requestAnimationFrame(loop);
+      if (busy || now - lastRun < DETECT_INTERVAL_MS || video.readyState < 2) return;
+      busy = true;
+      lastRun = now;
+      try {
+        const canvas = canvasRef.current;
+        // Match the canvas to the real video resolution so the skeleton lines up
+        if (canvas && (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight)) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+        const poses = await detectorRef.current.estimatePoses(video);
+        const ctx = canvas?.getContext("2d");
+        if (poses?.length) {
+          if (ctx) drawSkeleton(poses[0].keypoints, ctx);
+          setIsPoseCorrect(challenge.check(poses[0].keypoints, updateFeedback));
+        } else {
+          ctx?.clearRect(0, 0, canvas.width, canvas.height);
+          setIsPoseCorrect(false);
+          updateFeedback("Step into the frame so your full body is visible.");
+        }
+      } catch (err) {
+        console.error("Pose detection error:", err);
+      } finally {
+        busy = false;
+      }
+    };
+
+    const start = () => {
+      updateFeedback("Get into position…");
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    video.onloadeddata = start;
+    if (video.readyState >= 2) start();
+
+    return () => {
+      video.onloadeddata = null;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+  }, [phase, challenge, updateFeedback]);
+
+  // Count up only while the pose is held correctly
   useEffect(() => {
-    let timerInterval = null;
-    if (activeChallenge && isPoseCorrect) {
-      timerInterval = setInterval(() => {
-        setTimer((prev) => {
-          if (prev + 1 >= activeChallenge.duration) {
-            completeChallenge(activeChallenge);
-            return activeChallenge.duration;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timerInterval);
-  }, [activeChallenge, isPoseCorrect]);
+    if (phase !== "active" || !isPoseCorrect) return;
+    const id = setInterval(() => setTimer((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [phase, isPoseCorrect]);
 
-  const stopChallenge = () => {
-    window.speechSynthesis.cancel();
-    if (videoRef.current && videoRef.current.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
-      videoRef.current.srcObject = null;
-    }
-    setActiveChallenge(null);
-    setIsPoseCorrect(false);
-    setShowSetup(false);
-    setIsVideoReady(false);
-    setLastSpokenFeedback("");
-  };
-
-  const saveChallengeResults = async (challenge) => {
-    if (!user) {
-      console.error("User not found, cannot save points.");
-      setFeedback("Could not save points. Please log in again.");
-      return;
-    }
-    setFeedback("Saving your points...");
-    speak("Saving your points.");
-    const { error: rpcError } = await supabase.rpc(
-      "award_ar_challenge_points",
-      {
+  const saveResults = useCallback(
+    async (done) => {
+      if (!user) return { ok: false };
+      // Returns the points awarded: 0 means this challenge was already rewarded today
+      const { data, error } = await supabase.rpc("award_ar_challenge_points", {
         user_id_input: user.id,
-        points_to_add: challenge.points,
-        challenge_name: challenge.name,
-      }
-    );
-    if (rpcError) {
-      console.error("Error updating user points:", rpcError);
-      speak("There was an error saving your points.");
-    } else {
-      console.log("Successfully saved points and logged challenge.");
-    }
-  };
+        points_to_add: done.points,
+        challenge_name: done.name,
+      });
+      if (error) console.error("Error saving AR points:", error);
+      return { ok: !error, awarded: data };
+    },
+    [user]
+  );
 
-  const completeChallenge = async (challenge) => {
-    const completionMessage = `Challenge Complete! You earned ${challenge.points} points!`;
-    setFeedback(completionMessage);
-    speak(completionMessage);
-    await saveChallengeResults(challenge);
-    setTimeout(stopChallenge, 4000);
-  };
+  // Completion runs exactly once (no side effects inside state updaters)
+  useEffect(() => {
+    if (phase !== "active" || !challenge || timer < challenge.duration || completedRef.current) return;
+    completedRef.current = true;
+    stopCamera();
+    setIsPoseCorrect(false);
+    setPhase("complete");
+    const message = `Challenge complete! You earned ${challenge.points} points!`;
+    setFeedback(message);
+    speak(message);
+    saveResults(challenge).then(({ ok, awarded }) => {
+      if (!ok) setFeedback("Challenge complete! We couldn't save your points. Please check your connection.");
+      else if (awarded === 0) setFeedback("Challenge complete! You've already earned today's points for this one. Come back tomorrow!");
+    });
+  }, [timer, phase, challenge, stopCamera, speak, saveResults]);
+
+  const showRotatePrompt = challenge?.requiresLandscape && phase === "active" && !ignoreRotate;
+  const progress = challenge ? Math.min((timer / challenge.duration) * 100, 100) : 0;
 
   return (
     <>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-        <div className="flex items-center mb-4">
-          <Video className="w-6 h-6 text-blue-600 mr-2" />
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
-            AR Fitness Challenges
-          </h3>
-        </div>
-        <div className="space-y-4">
-          <p className="text-gray-600 dark:text-gray-400">
-            Use your camera to complete fitness challenges with AR guidance.
-          </p>
-          {challenges.map((challenge) => (
-            <div
-              key={challenge.id}
-              className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-              onClick={() => startChallengeSetup(challenge)}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-semibold text-gray-800 dark:text-white">
-                    {challenge.name}
-                  </h4>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {challenge.description}
-                  </p>
+      <div className="card">
+        <p className="text-muted mb-5">
+          Use your camera and on-device AI to check your form in real time. Video never leaves your device.
+        </p>
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {CHALLENGES.map((c) => (
+            <li key={c.id}>
+              <button
+                onClick={() => {
+                  setChallenge(c);
+                  setPhase("setup");
+                }}
+                className="w-full text-left p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-primary-400 hover:bg-primary-50/50 dark:hover:bg-primary-900/10 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">{c.name}</h3>
+                    <p className="text-sm text-muted mt-1">{c.description}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm text-muted flex items-center gap-1 justify-end">
+                      <Timer className="w-4 h-4" aria-hidden="true" />
+                      {c.duration}s
+                    </p>
+                    <p className="text-yellow-700 dark:text-yellow-400 font-semibold">{c.points} pts</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {challenge.duration}s
-                  </p>
-                  <p className="text-yellow-600 dark:text-yellow-400 font-semibold">
-                    {challenge.points} pts
-                  </p>
-                </div>
-              </div>
-            </div>
+              </button>
+            </li>
           ))}
-          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-            <Camera className="w-4 h-4 mr-1" />
-            <span>Camera access required</span>
-          </div>
-        </div>
+        </ul>
+        <p className="flex items-center text-sm text-muted mt-4">
+          <Camera className="w-4 h-4 mr-1.5" aria-hidden="true" />
+          Camera access required
+        </p>
       </div>
 
-      {activeChallenge && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-95 flex flex-col items-center justify-center z-50 animate-fade-in">
-          
-          <RotateDevicePrompt />
+      {challenge && (
+        <div
+          className="fixed inset-0 z-[70] bg-gray-950 text-white flex flex-col animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-label={challenge.name}
+        >
+          <div className="absolute top-0 inset-x-0 z-30 flex items-center justify-between gap-2 p-3 safe-top">
+            <button
+              onClick={() => setVoiceOn((v) => !v)}
+              className="w-11 h-11 rounded-full bg-black/50 flex items-center justify-center"
+              aria-label={voiceOn ? "Mute voice coaching" : "Unmute voice coaching"}
+              aria-pressed={!voiceOn}
+            >
+              {voiceOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={closeChallenge}
+              className="w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center"
+              aria-label="Exit challenge"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
 
-          <button
-            onClick={stopChallenge}
-            className="absolute top-4 right-4 text-white bg-red-600 rounded-full p-2 hover:bg-red-700 z-20"
-          >
-            <X size={24} />
-          </button>
-
-          {isLoading ? (
-            <div className="text-center">
-              <Loader className="w-12 h-12 text-blue-500 animate-spin mx-auto" />
-              <p className="mt-4 text-white">{feedback}</p>
-            </div>
-          ) : showSetup ? (
-            <div className="text-center p-4">
-              <h3 className="text-2xl font-bold mb-4 text-white">
-                Camera Setup
-              </h3>
-              <p className="text-gray-300 mb-6 max-w-md">
-                Place your device on a stable surface about 6-8 feet away. Make
-                sure your{" "}
-                <strong className="text-blue-400">
-                  entire body is visible
-                </strong>
-                .
+          {phase === "setup" && (
+            <div className="m-auto text-center p-6 max-w-md">
+              <h2 className="text-2xl sm:text-3xl font-bold">{challenge.name}</h2>
+              <p className="mt-4 text-gray-300">
+                Place your device on a stable surface about 2 metres away and make sure your{" "}
+                <strong className="text-primary-300">entire body is visible</strong>.
               </p>
-              <div className="space-x-4">
-                <button
-                  onClick={stopChallenge}
-                  className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
-                >
+              <p className="mt-2 text-gray-400 text-sm">{challenge.setupTip}</p>
+              <div className="mt-8 flex flex-col-reverse sm:flex-row gap-3 justify-center">
+                <button onClick={closeChallenge} className="btn bg-gray-700 hover:bg-gray-600 text-white">
                   Back
                 </button>
-                <button
-                  onClick={beginChallenge}
-                  className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                >
-                  I'm Ready!
+                <button onClick={beginChallenge} className="btn bg-green-600 hover:bg-green-700 text-white">
+                  I'm ready
                 </button>
               </div>
             </div>
-          ) : (
+          )}
+
+          {phase === "loading" && (
+            <div className="m-auto text-center p-6" role="status">
+              <Loader className="w-12 h-12 text-primary-400 animate-spin mx-auto" aria-hidden="true" />
+              <p className="mt-4 text-gray-200">{feedback}</p>
+              <p className="mt-1 text-sm text-gray-400">The first time can take a few seconds.</p>
+            </div>
+          )}
+
+          {phase === "error" && (
+            <div className="m-auto text-center p-6 max-w-md" role="alert">
+              <CameraOff className="w-12 h-12 mx-auto text-red-400" aria-hidden="true" />
+              <p className="mt-4 text-gray-200">{errorMessage}</p>
+              <button onClick={closeChallenge} className="btn mt-6 bg-gray-700 hover:bg-gray-600 text-white">
+                Back to challenges
+              </button>
+            </div>
+          )}
+
+          {phase === "complete" && (
+            <div className="m-auto text-center p-6 max-w-md" role="status">
+              <Trophy className="w-16 h-16 mx-auto text-yellow-400" aria-hidden="true" />
+              <h2 className="mt-4 text-2xl sm:text-3xl font-bold">Well done!</h2>
+              <p className="mt-2 text-gray-200">{feedback}</p>
+              <button onClick={closeChallenge} className="btn mt-6 bg-green-600 hover:bg-green-700 text-white">
+                Finish
+              </button>
+            </div>
+          )}
+
+          {phase === "active" && (
             <>
-              <div className="absolute inset-0 w-screen h-screen">
+              <div className="absolute inset-0">
                 <video
                   ref={videoRef}
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover transform -scale-x-100"
+                  className="w-full h-full object-cover -scale-x-100"
                 />
-                {/* --- FIX: Update canvas dimensions to match video --- */}
-                <canvas
-                  ref={canvasRef}
-                  width="1280"
-                  height="720"
-                  className="absolute top-0 left-0 w-full h-full object-cover transform -scale-x-100"
-                />
+                {/* Same object-fit + intrinsic size as the video, so points line up */}
+                <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover -scale-x-100" />
               </div>
-              <div className="relative z-10 flex flex-col items-center justify-between h-full w-full p-6 text-shadow-lg">
-                <h2 className="text-4xl font-bold text-white">
-                  {activeChallenge.name}
-                </h2>
-                <div
-                  className={`text-3xl font-semibold p-3 rounded-lg bg-black bg-opacity-50 ${
-                    isPoseCorrect ? "text-green-400" : "text-yellow-400"
+
+              <div className="relative z-10 flex flex-col items-center justify-between h-full w-full px-4 pt-20 pb-8 safe-bottom">
+                <h2 className="text-xl sm:text-3xl font-bold text-center drop-shadow">{challenge.name}</h2>
+                <p
+                  className={`max-w-xl text-center text-lg sm:text-2xl font-semibold px-4 py-2 rounded-xl bg-black/60 ${
+                    isPoseCorrect ? "text-green-400" : "text-yellow-300"
                   }`}
+                  aria-live="polite"
                 >
                   {feedback}
-                </div>
-                <div className="bg-black bg-opacity-50 text-white p-4 rounded-lg">
-                  <p className="font-semibold text-5xl font-mono">
-                    {timer}s / {activeChallenge.duration}s
+                </p>
+                <div className="w-full max-w-sm bg-black/60 rounded-2xl p-4 text-center">
+                  <p className="font-mono font-semibold text-3xl sm:text-5xl">
+                    {timer}s <span className="text-gray-400 text-xl sm:text-3xl">/ {challenge.duration}s</span>
                   </p>
+                  <div className="mt-3 h-2 rounded-full bg-white/20" aria-hidden="true">
+                    <div className="h-2 rounded-full bg-green-500 transition-all" style={{ width: `${progress}%` }} />
+                  </div>
                 </div>
               </div>
+
+              {showRotatePrompt && (
+                <div className="absolute inset-0 z-20 bg-gray-950/95 flex flex-col items-center justify-center p-6 text-center landscape:hidden">
+                  <Smartphone className="w-20 h-20 mb-4 -rotate-90" aria-hidden="true" />
+                  <h2 className="text-2xl font-bold">Rotate your device</h2>
+                  <p className="mt-2 text-gray-300">Landscape works best for planks.</p>
+                  <button onClick={() => setIgnoreRotate(true)} className="btn mt-6 bg-gray-700 hover:bg-gray-600 text-white">
+                    Continue in portrait
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>

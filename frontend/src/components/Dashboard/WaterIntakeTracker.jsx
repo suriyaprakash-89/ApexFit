@@ -1,171 +1,136 @@
-import React, { useEffect, useState } from "react";
+// frontend/src/components/Dashboard/WaterIntakeTracker.jsx
+import React, { useState } from "react";
+import { Droplets, Minus, Plus } from "lucide-react";
 import { useActivityStore } from "../../store/activityStore";
 import toast from "react-hot-toast";
+import { localDate } from "../../utils/date";
+import { offlineSavedToast } from "../../store/syncStore";
+import { getGoalTarget, percentOf, GLASS_TO_LITER } from "../../utils/goals";
+
+const MAX_GLASSES = 20;
+
+const getHydrationStatus = (percentage) => {
+  if (percentage >= 100) return "Goal reached. Excellent hydration! 💪";
+  if (percentage >= 75) return "Almost there, great job!";
+  if (percentage >= 50) return "Good progress, keep going!";
+  if (percentage >= 25) return "Getting started, stay hydrated!";
+  return "Time to hydrate!";
+};
+
+const getTip = (percentage) => {
+  if (percentage < 50) return "Drink a glass after each meal.";
+  if (percentage < 80) return "Keep a water bottle within reach.";
+  return "You're doing great. Keep it consistent!";
+};
 
 const WaterIntakeTracker = () => {
-  const [todayWater, setTodayWater] = useState(0);
-  // --- MODIFICATION: Import the new setWaterIntake function ---
-  const { water, addWaterIntake, setWaterIntake, goals } = useActivityStore();
+  const { water, setWaterIntake, goals } = useActivityStore();
+  const [saving, setSaving] = useState(false);
 
-  const GLASS_TO_LITER = 0.25;
+  const todayWater = water.find((entry) => entry.date === localDate())?.amount || 0;
+  const goal = getGoalTarget(goals, "water");
+  const percentage = percentOf(todayWater, goal);
+  const glasses = Array.from({ length: Math.min(Math.max(goal, todayWater), MAX_GLASSES) }, (_, i) => i + 1);
 
-  useEffect(() => {
-    const today = new Date().toISOString().split("T")[0];
-    const todayEntry = water.find((entry) => entry.date === today);
-    setTodayWater(todayEntry?.amount || 0);
-  }, [water]);
-
-  const getWaterGoal = () => {
-    const waterGoal = goals.find((g) => g.goal_type === "water");
-    return waterGoal?.target_value || 15;
-  };
-
-  const waterGoalGlasses = getWaterGoal();
-
-  const handleAddWater = async (glassesToAdd) => {
-    try {
-      if (todayWater + glassesToAdd > 20) {
-        toast.error("Maximum water intake is 20 glasses per day");
-        return;
-      }
-      await addWaterIntake(glassesToAdd);
-      toast.success(
-        `Added ${glassesToAdd} glass${glassesToAdd > 1 ? "es" : ""} of water!`
-      );
-    } catch (error) {
-      toast.error("Failed to track water intake");
+  const update = async (amount) => {
+    const next = Math.max(0, Math.min(amount, MAX_GLASSES));
+    if (amount > MAX_GLASSES) {
+      toast.error(`Maximum is ${MAX_GLASSES} glasses per day`);
+      return;
     }
-  };
-
-  // --- NEW: Handler for setting water amount directly ---
-  const handleSetWater = async (glasses) => {
+    if (next === todayWater || saving) return;
+    setSaving(true);
     try {
-      if (glasses > 20) {
-        toast.error("Maximum water intake is 20 glasses per day");
-        return;
-      }
-      await setWaterIntake(glasses);
-      toast.success(`Water intake set to ${glasses} glasses!`);
-    } catch (error) {
+      const { queued } = await setWaterIntake(next);
+      if (queued) offlineSavedToast();
+    } catch {
       toast.error("Failed to update water intake");
+    } finally {
+      setSaving(false);
     }
   };
-
-  const percentage = Math.min(
-    Math.round((todayWater / waterGoalGlasses) * 100),
-    100
-  );
-
-  const getHydrationStatus = () => {
-    if (percentage >= 100) return "Excellent hydration! 💪";
-    if (percentage >= 75) return "Great job! Almost there! 👍";
-    if (percentage >= 50) return "Good progress! Keep going! 💧";
-    if (percentage >= 25) return "Getting started! Stay hydrated! 🌊";
-    return "Time to hydrate! Your body needs water! ⚡";
-  };
-
-  const waterGlasses = Array.from(
-    { length: Math.min(waterGoalGlasses, 20) },
-    (_, i) => i + 1
-  );
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-3 flex flex-col h-full">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-md font-semibold text-gray-900 dark:text-white">
-          Water Intake
-        </h3>
-        <div className="w-6 h-6 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-          <span className="text-blue-600 dark:text-blue-300 text-xs">💧</span>
-        </div>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="card-title">Water intake</h2>
+        <Droplets className="w-5 h-5 text-teal-500" aria-hidden="true" />
       </div>
 
-      <div className="text-center mb-2">
-        <div className="text-xl font-bold text-blue-600 dark:text-blue-400 mb-1">
-          {(todayWater * GLASS_TO_LITER).toFixed(1)}L
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <button
+          type="button"
+          onClick={() => update(todayWater - 1)}
+          disabled={saving || todayWater === 0}
+          className="icon-btn border border-gray-200 dark:border-gray-700"
+          aria-label="Remove one glass"
+        >
+          <Minus className="w-5 h-5" />
+        </button>
+        <div className="text-center" aria-live="polite">
+          <p className="text-3xl font-bold text-teal-600 dark:text-teal-400">
+            {Number((todayWater * GLASS_TO_LITER).toFixed(2))} L
+          </p>
+          <p className="text-sm text-muted">
+            {todayWater} of {goal} glasses
+          </p>
         </div>
-        <p className="text-xs text-gray-600 dark:text-gray-400">
-          {todayWater} glass{todayWater !== 1 ? "es" : ""} today
-        </p>
+        <button
+          type="button"
+          onClick={() => update(todayWater + 1)}
+          disabled={saving || todayWater >= MAX_GLASSES}
+          className="icon-btn bg-teal-500 hover:bg-teal-600 !text-white"
+          aria-label="Add one glass"
+        >
+          <Plus className="w-5 h-5" />
+        </button>
       </div>
 
-      <div className="mb-2">
-        <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
-          <span>Goal Progress</span>
-          <span>
-            {todayWater}/{waterGoalGlasses} glasses
-          </span>
-        </div>
-        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-          <div
-            className="bg-gradient-to-r from-blue-400 to-blue-600 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${percentage}%` }}
-          ></div>
-        </div>
-        <p className="text-xs text-green-600 dark:text-green-400 mt-1 font-medium text-center">
-          {getHydrationStatus()}
-        </p>
+      <div
+        className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5"
+        role="progressbar"
+        aria-valuenow={percentage}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Water goal progress"
+      >
+        <div
+          className="bg-gradient-to-r from-teal-400 to-teal-600 h-2.5 rounded-full transition-all duration-300"
+          style={{ width: `${percentage}%` }}
+        />
       </div>
+      <p className="text-sm text-teal-700 dark:text-teal-300 mt-2 font-medium text-center">
+        {getHydrationStatus(percentage)}
+      </p>
 
-      <div className="mb-2">
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 text-center">
-          Track your glasses
-        </p>
-        <div className="grid grid-cols-8 gap-1">
-          {waterGlasses.map((glass) => (
+      <fieldset className="mt-4">
+        <legend className="text-xs text-muted mb-2">Tap a glass to set today's total</legend>
+        <div className="grid grid-cols-5 sm:grid-cols-8 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+          {glasses.map((glass) => (
             <button
               key={glass}
-              // --- MODIFICATION: Call the new handleSetWater function ---
-              onClick={() => handleSetWater(glass)}
-              className={`w-5 h-5 rounded-full flex items-center justify-center text-xs transition-all duration-200 ${
+              type="button"
+              onClick={() => update(glass === todayWater ? glass - 1 : glass)}
+              disabled={saving}
+              aria-label={`${glass} glass${glass > 1 ? "es" : ""}`}
+              aria-pressed={todayWater >= glass}
+              className={`h-10 rounded-lg flex items-center justify-center text-xs font-semibold transition-colors ${
                 todayWater >= glass
-                  ? "bg-blue-500 text-white shadow-md transform scale-105"
-                  : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 hover:scale-110"
+                  ? "bg-teal-500 text-white"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-teal-50 dark:hover:bg-teal-900/30"
               }`}
             >
               {glass}
             </button>
           ))}
         </div>
-      </div>
+      </fieldset>
 
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <button
-          onClick={() => handleAddWater(1)}
-          className="bg-blue-500 hover:bg-blue-600 text-white py-1 px-2 rounded text-xs font-medium transition-colors flex items-center justify-center"
-        >
-          <span className="mr-1">+1</span> Glass
-        </button>
-        <button
-          onClick={() => handleAddWater(2)}
-          className="bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded text-xs font-medium transition-colors flex items-center justify-center"
-        >
-          <span className="mr-1">+2</span> Glasses
-        </button>
-      </div>
-
-      <div className="bg-blue-50 dark:bg-blue-900/20 p-2 rounded text-xs mt-auto">
-        <div className="flex items-start">
-          <span className="text-blue-500 mr-1 text-xs">💡</span>
-          <div>
-            <p className="font-medium text-blue-800 dark:text-blue-200">
-              Hydration Tips
-            </p>
-            <p className="text-blue-700 dark:text-blue-300 mt-0.5">
-              {percentage < 50
-                ? "Drink a glass after each meal"
-                : percentage < 80
-                ? "Keep a water bottle nearby"
-                : "You're doing great! Maintain consistency"}
-            </p>
-          </div>
+      <div className="mt-auto pt-4">
+        <div className="bg-teal-50 dark:bg-teal-900/20 p-3 rounded-xl text-sm">
+          <p className="font-medium text-teal-800 dark:text-teal-200">💡 Tip</p>
+          <p className="text-teal-700 dark:text-teal-300">{getTip(percentage)}</p>
         </div>
-      </div>
-
-      <div className="mt-1 text-center">
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          Recommended: 2-4L daily
-        </p>
       </div>
     </div>
   );
