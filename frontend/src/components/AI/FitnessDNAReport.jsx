@@ -14,7 +14,7 @@ import {
   Lightbulb,
   BarChart3,
 } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { apiJson, withClientDate } from "../../lib/api";
 import EmptyState from "../UI/EmptyState";
 import { SkeletonCard, SkeletonStatGrid } from "../UI/Skeleton";
@@ -119,26 +119,26 @@ const FitnessDNAReport = () => {
 
   return (
     <div className="space-y-6">
-      <section className="card bg-gradient-to-br from-primary-600 to-teal-600 !border-0 text-white">
+      <section className="card ambient border-primary/25">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5" aria-hidden="true" />
-            <h2 className="text-lg font-semibold">Your last 30 days</h2>
+            <Sparkles className="h-5 w-5 text-primary" aria-hidden="true" />
+            <h2 className="font-display text-lg font-semibold text-foreground">Your last 30 days</h2>
           </div>
           <button
             onClick={() => load(true)}
             disabled={refreshing}
-            className="btn min-h-[36px] px-3 bg-white/15 hover:bg-white/25 text-white"
+            className="btn-soft min-h-[36px] px-3"
           >
             <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
         </div>
-        <p className="mt-3 text-white/90 leading-relaxed">
+        <p className="mt-3 leading-relaxed text-foreground/90">
           {report.summary ||
             "Here's how your activity, sleep and hydration have looked over the last month."}
         </p>
-        <p className="mt-3 text-xs text-white/70">
+        <p className="mt-3 text-xs text-muted-foreground">
           {report.aiGenerated ? "Written by your AI coach from your logs" : "Based on your logs"} · updated{" "}
           {formatDate(report.generatedFor, { month: "short", day: "numeric" })}
         </p>
@@ -148,7 +148,7 @@ const FitnessDNAReport = () => {
         {stats.map((s) => (
           <div key={s.label} className="card !p-4 sm:!p-5">
             <p className="text-sm text-muted">{s.label}</p>
-            <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{s.value}</p>
+            <p className="stat-number mt-1 text-2xl text-foreground">{s.value}</p>
             <p className="text-xs text-muted mt-0.5">{s.sub}</p>
           </div>
         ))}
@@ -162,7 +162,7 @@ const FitnessDNAReport = () => {
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Icon className="w-5 h-5 text-primary-600 dark:text-primary-400" aria-hidden="true" />
-                  <h3 className="font-semibold text-gray-900 dark:text-white">{label}</h3>
+                  <h3 className="font-semibold text-foreground">{label}</h3>
                 </div>
                 <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${RATING_STYLES[rating] || RATING_STYLES["Not enough data"]}`}>
                   {rating}
@@ -182,7 +182,7 @@ const FitnessDNAReport = () => {
         <ol className="space-y-3">
           {report.recommendations.map((rec, i) => (
             <li key={rec} className="flex gap-3">
-              <span className="shrink-0 w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 text-xs font-bold flex items-center justify-center">
+              <span className="shrink-0 w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center">
                 {i + 1}
               </span>
               <span className="text-sm text-gray-700 dark:text-gray-300">{rec}</span>

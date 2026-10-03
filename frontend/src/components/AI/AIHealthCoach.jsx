@@ -1,8 +1,9 @@
 // frontend/src/components/AI/AIHealthCoach.jsx
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { Brain, Send, Square, Sparkles, RotateCcw } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { apiFetch, apiJson, withClientDate } from "../../lib/api";
 import { confirmDialog } from "../../store/confirmStore";
 import { localDate } from "../../utils/date";
@@ -28,7 +29,7 @@ const TypingDots = () => (
     {[0, 150, 300].map((delay) => (
       <span
         key={delay}
-        className="w-2 h-2 bg-primary-500 rounded-full animate-bounce"
+        className="h-2 w-2 animate-bounce rounded-full bg-pulse-400"
         style={{ animationDelay: `${delay}ms` }}
       />
     ))}
@@ -36,8 +37,8 @@ const TypingDots = () => (
 );
 
 const CoachAvatar = () => (
-  <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary-600 to-teal-500 flex items-center justify-center">
-    <Brain className="w-4 h-4 text-white" aria-hidden="true" />
+  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pulse-500/15 ring-1 ring-pulse-500/30">
+    <Brain className="h-4 w-4 text-pulse-400" aria-hidden="true" />
   </div>
 );
 
@@ -52,6 +53,7 @@ const AIHealthCoach = () => {
   const textareaRef = useRef(null);
   const abortRef = useRef(null);
   const stickToBottom = useRef(true);
+  const [params, setParams] = useSearchParams();
 
   // Load the saved conversation + personalised starter prompts
   useEffect(() => {
@@ -70,6 +72,16 @@ const AIHealthCoach = () => {
       abortRef.current?.abort();
     };
   }, []);
+
+  // A suggestion from the dashboard (?prompt=...) pre-fills the box; the user decides whether to send it
+  useEffect(() => {
+    const prompt = params.get("prompt");
+    if (prompt) {
+      setInput(prompt.slice(0, MAX_CHARS));
+      setParams({}, { replace: true });
+      textareaRef.current?.focus();
+    }
+  }, [params, setParams]);
 
   // Follow new content only if the user hasn't scrolled up to read
   useEffect(() => {
@@ -222,17 +234,17 @@ const AIHealthCoach = () => {
 
   return (
     <section
-      className="coach-height flex flex-col bg-white dark:bg-gray-800 sm:rounded-2xl sm:border border-gray-200 dark:border-gray-700 sm:shadow-sm overflow-hidden"
+      className="coach-height flex flex-col overflow-hidden bg-card sm:rounded-2xl sm:border sm:border-border sm:shadow-card"
       aria-label="AI health coach chat"
     >
       {/* Header */}
-      <header className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+      <header className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-border">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-600 to-teal-500 flex items-center justify-center">
-            <Brain className="w-5 h-5 text-white" aria-hidden="true" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-pulse-500/15 ring-1 ring-pulse-500/30">
+            <Brain className="h-5 w-5 text-pulse-400" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <h1 className="font-semibold text-gray-900 dark:text-white">Apex · AI Coach</h1>
+            <h1 className="font-display text-base font-bold text-foreground">Apex · AI Coach</h1>
             <p className="text-xs text-muted truncate">Personalised with your last 7 days of data</p>
           </div>
         </div>
@@ -266,21 +278,27 @@ const AIHealthCoach = () => {
           </div>
         ) : messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center px-4">
-            <div className="w-14 h-14 rounded-2xl bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center mb-4">
-              <Sparkles className="w-7 h-7 text-primary-600 dark:text-primary-400" aria-hidden="true" />
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-pulse-500/15 ring-1 ring-pulse-500/30">
+              <Sparkles className="h-7 w-7 text-pulse-400" aria-hidden="true" />
             </div>
-            <p className="font-semibold text-gray-900 dark:text-white">Hi! I'm Apex, your health coach.</p>
-            <p className="mt-1 text-sm text-muted max-w-sm">
-              I can see your steps, sleep, water and workouts, so ask me anything about training, nutrition or
-              recovery.
+            <p className="font-display text-lg font-bold text-foreground">Hi, I&apos;m Apex, your coach.</p>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              I can see your recent steps, sleep, water, workouts and goals, so my answers are about you. Pick a question below or ask your own.
             </p>
+            <ul className="mt-5 flex flex-wrap justify-center gap-2" aria-label="What the coach can see">
+              {["Steps", "Sleep", "Water", "Workouts", "Goals"].map((t) => (
+                <li key={t} className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
+                  {t}
+                </li>
+              ))}
+            </ul>
           </div>
         ) : (
           <ul className="space-y-4">
             {messages.map((msg) =>
               msg.role === "user" ? (
                 <li key={msg.id} className="flex justify-end">
-                  <div className="max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-br-md bg-primary-600 text-white px-4 py-2.5 text-sm whitespace-pre-wrap break-words">
+                  <div className="max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-br-md bg-primary text-primary-foreground px-4 py-2.5 text-sm whitespace-pre-wrap break-words">
                     <span className="sr-only">You: </span>
                     {msg.content}
                   </div>
@@ -291,8 +309,8 @@ const AIHealthCoach = () => {
                   <div
                     className={`max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-tl-md px-4 py-2.5 ${
                       msg.error
-                        ? "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300"
-                        : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        ? "bg-destructive/10 text-destructive"
+                        : "bg-secondary text-secondary-foreground"
                     }`}
                   >
                     <span className="sr-only">Coach: </span>
@@ -324,14 +342,14 @@ const AIHealthCoach = () => {
       </div>
 
       {/* Composer */}
-      <div className="shrink-0 border-t border-gray-200 dark:border-gray-700 px-3 sm:px-4 pt-3 pb-3">
+      <div className="shrink-0 border-t border-border px-3 pb-3 pt-3 sm:px-4">
         {!streaming && (
           <div className="flex gap-2 overflow-x-auto scrollbar-none pb-3 -mx-1 px-1" aria-label="Suggested questions">
             {suggestions.map((question) => (
               <button
                 key={question}
                 onClick={() => handleSend(question)}
-                className="shrink-0 min-h-[40px] px-3.5 rounded-full border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-primary-50 hover:border-primary-200 dark:hover:bg-primary-900/20 dark:hover:border-primary-700 whitespace-nowrap"
+                className="shrink-0 min-h-[40px] whitespace-nowrap rounded-full border border-border bg-background/50 px-3.5 text-sm text-foreground/90 transition-colors hover:border-primary/40 hover:bg-primary/10"
               >
                 {question}
               </button>
@@ -376,10 +394,10 @@ const AIHealthCoach = () => {
             </button>
           )}
         </form>
-        <div className="flex justify-between gap-2 mt-2 text-[11px] text-muted">
+        <div className="mt-2 flex justify-between gap-2 text-[11px] text-muted-foreground">
           <span>General guidance, not medical advice.</span>
           {nearLimit && (
-            <span className={input.length >= MAX_CHARS ? "text-red-600 dark:text-red-400" : ""}>
+            <span className={input.length >= MAX_CHARS ? "text-destructive" : ""}>
               {input.length}/{MAX_CHARS}
             </span>
           )}

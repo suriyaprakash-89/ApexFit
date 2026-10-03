@@ -61,7 +61,7 @@ const AchievementsCard = ({ points }) => {
               className={`relative p-3 rounded-xl border text-center ${
                 a.earned
                   ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20"
-                  : "border-gray-200 dark:border-gray-700"
+                  : "border-border"
               }`}
               title={a.description}
             >
@@ -69,7 +69,7 @@ const AchievementsCard = ({ points }) => {
               <span className={`text-3xl ${a.earned ? "" : "grayscale opacity-50"}`} aria-hidden="true">
                 {a.icon || "🏅"}
               </span>
-              <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white leading-tight">{a.name}</p>
+              <p className="mt-1 text-sm font-semibold text-foreground leading-tight">{a.name}</p>
               <p className="text-xs text-muted mt-0.5 leading-snug">{a.description}</p>
               {a.earned ? (
                 <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">+{a.points} pts</p>

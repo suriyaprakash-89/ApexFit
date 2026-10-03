@@ -1,7 +1,7 @@
 // frontend/src/pages/AdminPanel.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { Users, Activity, Trash2, Shield, Target } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { apiJson } from "../lib/api";
 import { useAuthStore } from "../store/authStore";
 import { confirmDialog } from "../store/confirmStore";
@@ -106,21 +106,21 @@ const AdminPanel = () => {
             <Icon className={`w-8 h-8 ${color}`} aria-hidden="true" />
             <div>
               <p className="text-sm text-muted">{label}</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{(value ?? 0).toLocaleString()}</p>
+              <p className="text-2xl font-bold text-foreground">{(value ?? 0).toLocaleString()}</p>
             </div>
           </div>
         ))}
       </div>
 
       <section className="card !p-0 overflow-hidden">
-        <h2 className="card-title px-5 py-4 border-b border-gray-200 dark:border-gray-700">Users</h2>
+        <h2 className="card-title px-5 py-4 border-b border-border">Users</h2>
         <ul className="divide-y divide-gray-200 dark:divide-gray-700">
           {users.map((u) => {
             const isSelf = u.id === user?.id;
             return (
               <li key={u.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  <p className="text-sm font-medium text-foreground truncate">
                     {u.name || "Unnamed"} {isSelf && <span className="text-muted font-normal">(you)</span>}
                   </p>
                   <p className="text-sm text-muted truncate">{u.email}</p>

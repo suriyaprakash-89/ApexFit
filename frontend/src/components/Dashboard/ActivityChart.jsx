@@ -11,7 +11,7 @@ import {
   Filler,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import { useActivityStore, getChartRange } from "../../store/activityStore";
 import { useTheme } from "../../contexts/ThemeContext";
 import { parseLocalDate } from "../../utils/date";
@@ -25,6 +25,31 @@ const PERIODS = [
 ];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const compact = (v) => new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(v);
+
+/** True below Tailwind's `sm` breakpoint; drives a leaner chart on phones. */
+const useIsMobile = () => {
+  const query = "(max-width: 639px)";
+  const [mobile, setMobile] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = (e) => setMobile(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return mobile;
+};
+
+/** Vertical fade from the line colour to transparent, sized to the plot area. */
+const gradientFill = (rgb, top, bottom = 0) => (context) => {
+  const { ctx, chartArea } = context.chart;
+  if (!chartArea) return `rgba(${rgb}, ${top})`;
+  const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+  g.addColorStop(0, `rgba(${rgb}, ${top})`);
+  g.addColorStop(1, `rgba(${rgb}, ${bottom})`);
+  return g;
+};
 
 const shiftAnchor = (anchor, period, direction) => {
   const d = new Date(anchor);
@@ -69,6 +94,7 @@ const bucketize = (period, start, end, steps, activities) => {
 const ActivityChart = ({ defaultPeriod = "week" }) => {
   const { chart, fetchChartData } = useActivityStore();
   const { isDark } = useTheme();
+  const isMobile = useIsMobile();
   const [period, setPeriod] = useState(defaultPeriod);
   const [anchor, setAnchor] = useState(() => new Date());
 
@@ -95,30 +121,46 @@ const ActivityChart = ({ defaultPeriod = "week" }) => {
     return String(start.getFullYear());
   })();
 
-  const textColor = isDark ? "#d1d5db" : "#4b5563";
-  const gridColor = isDark ? "rgba(75, 85, 99, 0.4)" : "rgba(229, 231, 235, 1)";
+  const textColor = isDark ? "#97a39b" : "#4a5750";
+  const gridColor = isDark ? "rgba(151, 163, 155, 0.14)" : "rgba(74, 87, 80, 0.14)";
+  // Brand volt for steps (darker on light backgrounds so the line keeps its contrast)
+  const stepsRgb = isDark ? "180, 238, 52" : "79, 138, 11";
+  const dense = period === "month";
+  const fontSize = isMobile ? 10 : 12;
+
+  const baseLine = {
+    tension: 0.4,
+    borderWidth: isMobile ? 2 : 2.5,
+    pointRadius: 0,
+    pointHoverRadius: 5,
+    pointHoverBorderWidth: 2,
+    pointHoverBorderColor: isDark ? "#0a0e0c" : "#ffffff",
+    // Show markers only when there are few points; the month view stays clean
+    ...(dense ? {} : { pointRadius: isMobile ? 2 : 3 }),
+  };
 
   const data = {
     labels,
     datasets: [
       {
+        ...baseLine,
         label: "Steps",
         data: stepsData,
         yAxisID: "y",
-        borderColor: "rgb(59, 130, 246)",
-        backgroundColor: "rgba(59, 130, 246, 0.12)",
+        borderColor: `rgb(${stepsRgb})`,
+        pointBackgroundColor: `rgb(${stepsRgb})`,
+        backgroundColor: gradientFill(stepsRgb, 0.3),
         fill: true,
-        tension: 0.35,
-        pointRadius: period === "month" ? 2 : 3,
       },
       {
+        ...baseLine,
         label: "Active calories",
         data: caloriesData,
         yAxisID: "y1",
         borderColor: "rgb(249, 115, 22)",
-        backgroundColor: "rgba(249, 115, 22, 0.5)",
-        tension: 0.35,
-        pointRadius: period === "month" ? 2 : 3,
+        pointBackgroundColor: "rgb(249, 115, 22)",
+        backgroundColor: gradientFill("249, 115, 22", 0.2),
+        fill: true,
       },
     ],
   };
@@ -127,29 +169,55 @@ const ActivityChart = ({ defaultPeriod = "week" }) => {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: "index", intersect: false },
+    layout: { padding: { top: 4, right: isMobile ? 0 : 4 } },
     plugins: {
-      legend: { position: "bottom", labels: { color: textColor, usePointStyle: true, boxWidth: 8 } },
+      legend: {
+        position: "top",
+        align: "end",
+        labels: { color: textColor, usePointStyle: true, pointStyle: "circle", boxWidth: 6, boxHeight: 6, padding: 14, font: { size: fontSize + 1 } },
+      },
       tooltip: {
+        backgroundColor: isDark ? "rgba(18, 24, 22, 0.97)" : "rgba(255, 255, 255, 0.97)",
+        titleColor: isDark ? "#f9fafb" : "#111827",
+        bodyColor: isDark ? "#d1d5db" : "#374151",
+        borderColor: isDark ? "rgba(75, 85, 99, 0.6)" : "rgba(229, 231, 235, 1)",
+        borderWidth: 1,
+        cornerRadius: 12,
+        padding: 10,
+        boxPadding: 4,
+        usePointStyle: true,
         callbacks: {
-          label: (ctx) => `${ctx.dataset.label}: ${Number(ctx.parsed.y).toLocaleString()}`,
+          label: (ctx) => ` ${ctx.dataset.label}: ${Number(ctx.parsed.y).toLocaleString()}`,
         },
       },
     },
     scales: {
-      x: { ticks: { color: textColor, maxRotation: 0, autoSkip: true }, grid: { display: false } },
+      x: {
+        border: { display: false },
+        ticks: {
+          color: textColor,
+          font: { size: fontSize },
+          maxRotation: 0,
+          autoSkip: true,
+          maxTicksLimit: isMobile && dense ? 8 : undefined,
+        },
+        grid: { display: false },
+      },
       y: {
         beginAtZero: true,
         position: "left",
-        ticks: { color: textColor, callback: (v) => Number(v).toLocaleString() },
+        border: { display: false },
+        ticks: { color: textColor, font: { size: fontSize }, maxTicksLimit: 5, callback: (v) => compact(v) },
         grid: { color: gridColor },
-        title: { display: true, text: "Steps", color: textColor },
+        title: { display: !isMobile, text: "Steps", color: textColor },
       },
       y1: {
         beginAtZero: true,
         position: "right",
-        ticks: { color: textColor, callback: (v) => Number(v).toLocaleString() },
+        border: { display: false },
+        ticks: { color: textColor, font: { size: fontSize }, maxTicksLimit: 5, callback: (v) => compact(v) },
         grid: { drawOnChartArea: false },
-        title: { display: true, text: "Calories", color: textColor },
+        title: { display: !isMobile, text: "Calories", color: textColor },
       },
     },
   };
@@ -176,7 +244,7 @@ const ActivityChart = ({ defaultPeriod = "week" }) => {
               }}
               className={`px-3 min-h-[36px] rounded-lg text-sm font-medium transition-colors ${
                 period === p.value
-                  ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm"
+                  ? "bg-white dark:bg-gray-600 text-foreground shadow-sm"
                   : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
               }`}
             >
@@ -207,17 +275,20 @@ const ActivityChart = ({ defaultPeriod = "week" }) => {
         </button>
       </div>
 
-      <div className="relative flex-1 min-h-[260px] sm:min-h-[300px]">
-        <Line data={data} options={options} aria-label={`Steps and active calories, ${rangeLabel}`} role="img" />
+      <div className="relative flex-1 min-h-[240px] sm:min-h-[300px] -mx-1 sm:mx-0">
+        {!chart.loading && !hasData ? (
+          <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 text-center sm:min-h-[300px]">
+            <BarChart3 className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+            <p className="text-sm font-medium text-foreground">Nothing logged in this period</p>
+            <p className="text-xs text-muted-foreground">Steps and active calories will chart here as you log them.</p>
+          </div>
+        ) : (
+          <Line data={data} options={options} aria-label={`Steps and active calories, ${rangeLabel}`} role="img" />
+        )}
         {chart.loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-gray-800/60 rounded-xl">
+          <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-card/70">
             <div className="skeleton w-24 h-3" />
           </div>
-        )}
-        {!chart.loading && !hasData && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm text-muted pointer-events-none">
-            No steps or workouts logged in this period.
-          </p>
         )}
       </div>
     </div>

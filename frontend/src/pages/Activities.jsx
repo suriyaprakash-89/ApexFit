@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Plus, Pencil, Trash2, Activity } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
 import { useActivityStore } from "../store/activityStore";
@@ -225,7 +225,7 @@ const Activities = () => {
                     {activityEmoji(activity.type)}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 dark:text-white capitalize">{activity.type}</p>
+                    <p className="font-medium text-foreground capitalize">{activity.type}</p>
                     <p className="text-sm text-muted">
                       {formatDate(activity.date, { month: "short", day: "numeric" })} · {activity.duration} min ·{" "}
                       {activity.calories} cal

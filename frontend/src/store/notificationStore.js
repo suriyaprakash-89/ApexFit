@@ -2,7 +2,7 @@
 // Single owner of notification state + realtime (NotificationCenter only renders it).
 import { create } from "zustand";
 import { supabase } from "../lib/supabase";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { localDate } from "../utils/date";
 import { getGoalTarget } from "../utils/goals";
 

@@ -2,7 +2,7 @@
 // After the user logs something, ask the server to complete challenges, unlock
 // achievements and create goal notifications. Debounced so quick taps (e.g. +1
 // glass three times) only trigger one check.
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { apiJson, tzOffset } from "./api";
 import { localDate } from "../utils/date";
 import { supabase } from "./supabase";

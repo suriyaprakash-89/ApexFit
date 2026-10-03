@@ -30,6 +30,17 @@ const getUserId = async () => {
   return session?.user?.id ?? null;
 };
 
+/** Consecutive logged days ending today (or yesterday, so the streak survives until you log today). */
+const computeStreak = (dates, today) => {
+  let cursor = dates.has(today) ? new Date() : addDays(new Date(), -1);
+  let count = 0;
+  while (dates.has(localDate(cursor))) {
+    count += 1;
+    cursor = addDays(cursor, -1);
+  }
+  return count;
+};
+
 /** Date range [start, end] (inclusive, local "YYYY-MM-DD") for a chart period around `anchor`. */
 export const getChartRange = (period, anchor = new Date()) => {
   const a = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
@@ -51,6 +62,15 @@ export const getChartRange = (period, anchor = new Date()) => {
 
 let realtimeChannel = null;
 
+/** Share one in-flight request between callers (StrictMode, several components, realtime echoes). */
+const inflight = new Map();
+const dedupe = (key, fn) => {
+  if (inflight.has(key)) return inflight.get(key);
+  const promise = Promise.resolve(fn()).finally(() => inflight.delete(key));
+  inflight.set(key, promise);
+  return promise;
+};
+
 export const useActivityStore = create((set, get) => ({
   activities: [],
   steps: [],
@@ -62,8 +82,33 @@ export const useActivityStore = create((set, get) => ({
   dashboardLoading: true,
   dashboardError: null,
   chart: { key: null, steps: [], activities: [], loading: true },
+  streak: { count: 0, week: [], loading: true },
 
-  fetchDashboardData: async () => {
+  /** Days with any log (activity, steps or water): drives the streak flame and the 7-day dots. */
+  fetchStreak: () => dedupe("streak", async () => {
+    try {
+      const userId = await getUserId();
+      if (!userId) return;
+      const since = localDate(addDays(new Date(), -120));
+      const [a, st, w] = await Promise.all([
+        supabase.from("activities").select("date").eq("user_id", userId).gte("date", since),
+        supabase.from("steps").select("date").eq("user_id", userId).gte("date", since).gt("steps", 0),
+        supabase.from("water").select("date").eq("user_id", userId).gte("date", since).gt("amount", 0),
+      ]);
+      const dates = new Set([...(a.data || []), ...(st.data || []), ...(w.data || [])].map((r) => String(r.date).slice(0, 10)));
+      const today = localDate();
+      const week = Array.from({ length: 7 }, (_, i) => {
+        const d = addDays(new Date(), i - 6);
+        return { date: localDate(d), logged: dates.has(localDate(d)), label: d.toLocaleDateString(undefined, { weekday: "narrow" }) };
+      });
+      set({ streak: { count: computeStreak(dates, today), week, loading: false } });
+    } catch (error) {
+      console.warn("Streak unavailable:", error.message);
+      set((state) => ({ streak: { ...state.streak, loading: false } }));
+    }
+  }),
+
+  fetchDashboardData: () => dedupe("dashboard", async () => {
     try {
       const userId = await getUserId();
       if (!userId) return;
@@ -95,6 +140,7 @@ export const useActivityStore = create((set, get) => ({
       };
       set({ ...snapshot, dashboardLoading: false, dashboardError: null });
       writeSnapshot(userId, snapshot);
+      get().fetchStreak();
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
       // Offline (or a hiccup): fall back to the last data synced on this device
@@ -110,7 +156,7 @@ export const useActivityStore = create((set, get) => ({
           : "Couldn't load your latest data.",
       });
     }
-  },
+  }),
 
   fetchChartData: async (period, anchor = new Date()) => {
     const { start, end } = getChartRange(period, anchor);
@@ -147,7 +193,7 @@ export const useActivityStore = create((set, get) => ({
   },
 
   /** Goals with progress computed live from the user's logs (server-side). */
-  fetchGoalProgress: async () => {
+  fetchGoalProgress: () => dedupe("goalProgress", async () => {
     try {
       const goalProgress = await apiJson(`/api/goals/progress?${withClientDate()}`);
       set({ goalProgress, goalProgressLoading: false, goalProgressError: null });
@@ -155,7 +201,7 @@ export const useActivityStore = create((set, get) => ({
       console.warn("Goal progress unavailable:", error.message);
       set({ goalProgressLoading: false, goalProgressError: error.message });
     }
-  },
+  }),
 
   /**
    * Save an activity. Works offline: the client-generated id makes a later replay
@@ -258,5 +304,6 @@ export const useActivityStore = create((set, get) => ({
       dashboardLoading: true,
       dashboardError: null,
       chart: { key: null, steps: [], activities: [], loading: true },
+      streak: { count: 0, week: [], loading: true },
     }),
 }));

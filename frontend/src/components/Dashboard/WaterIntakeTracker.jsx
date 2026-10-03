@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { Droplets, Minus, Plus } from "lucide-react";
 import { useActivityStore } from "../../store/activityStore";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { localDate } from "../../utils/date";
 import { offlineSavedToast } from "../../store/syncStore";
 import { getGoalTarget, percentOf, GLASS_TO_LITER } from "../../utils/goals";
@@ -62,7 +62,7 @@ const WaterIntakeTracker = () => {
           type="button"
           onClick={() => update(todayWater - 1)}
           disabled={saving || todayWater === 0}
-          className="icon-btn border border-gray-200 dark:border-gray-700"
+          className="icon-btn border border-border"
           aria-label="Remove one glass"
         >
           <Minus className="w-5 h-5" />
@@ -95,7 +95,7 @@ const WaterIntakeTracker = () => {
         aria-label="Water goal progress"
       >
         <div
-          className="bg-gradient-to-r from-teal-400 to-teal-600 h-2.5 rounded-full transition-all duration-300"
+          className="bg-pulse-400 h-2.5 rounded-full transition-all duration-300"
           style={{ width: `${percentage}%` }}
         />
       </div>

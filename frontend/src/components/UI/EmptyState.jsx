@@ -4,12 +4,12 @@ import React from "react";
 const EmptyState = ({ icon: Icon, title, description, action, compact = false }) => (
   <div className={`text-center ${compact ? "py-6" : "py-12"} px-4`}>
     {Icon && (
-      <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center">
-        <Icon className="w-7 h-7 text-primary-600 dark:text-primary-400" aria-hidden="true" />
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10">
+        <Icon className="h-7 w-7 text-primary" aria-hidden="true" />
       </div>
     )}
-    <p className="font-semibold text-gray-900 dark:text-white">{title}</p>
-    {description && <p className="mt-1 text-sm text-muted max-w-sm mx-auto">{description}</p>}
+    <p className="font-display font-semibold text-foreground">{title}</p>
+    {description && <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>}
     {action && <div className="mt-5 flex justify-center">{action}</div>}
   </div>
 );

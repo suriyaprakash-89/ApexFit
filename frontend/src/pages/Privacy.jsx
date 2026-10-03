@@ -9,7 +9,7 @@ const LAST_UPDATED = "October 2, 2026";
 
 const Section = ({ title, children }) => (
   <section className="mt-10">
-    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h2>
+    <h2 className="text-xl font-semibold text-foreground">{title}</h2>
     <div className="mt-3 space-y-3 text-gray-700 dark:text-gray-300 leading-relaxed">{children}</div>
   </section>
 );
@@ -21,12 +21,12 @@ const Privacy = () => {
   }, []);
 
   return (
-    <div className="min-h-dvh bg-gray-50 dark:bg-gray-900">
-      <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 safe-top">
+    <div className="min-h-dvh bg-background">
+      <header className="border-b border-border bg-background safe-top">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5" aria-label="ApeXfit home">
             <img src="/logo.png" alt="" className="w-8 h-8 rounded-full" />
-            <span className="font-bold text-gray-900 dark:text-white">ApeXfit</span>
+            <span className="font-bold text-foreground">ApeXfit</span>
           </Link>
           <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 dark:text-primary-400">
             <ArrowLeft className="w-4 h-4" aria-hidden="true" /> Back
@@ -35,7 +35,7 @@ const Privacy = () => {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 dark:text-white">Privacy</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">Privacy</h1>
         <p className="mt-2 text-sm text-muted">Last updated {LAST_UPDATED}</p>
         <p className="mt-6 text-lg text-gray-700 dark:text-gray-300">
           ApeXfit is a fitness tracker. This page explains, in plain language, what we store, why, who else touches

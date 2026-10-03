@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { MailCheck } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { useAuthStore } from "../store/authStore";
 import { AuthLayout } from "../components/Auth/AuthLayout";
 
@@ -38,7 +38,7 @@ const ForgotPassword = () => {
       {sent ? (
         <div className="text-center py-2" role="status">
           <MailCheck className="w-12 h-12 mx-auto text-green-600 dark:text-green-400" aria-hidden="true" />
-          <p className="mt-4 font-medium text-gray-900 dark:text-white">Check your inbox</p>
+          <p className="mt-4 font-medium text-foreground">Check your inbox</p>
           <p className="mt-1 text-sm text-muted">
             If an account exists for <strong>{email}</strong>, you'll get a link to set a new password.
           </p>

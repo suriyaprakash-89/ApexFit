@@ -77,10 +77,10 @@ const NotificationCenter = () => {
         <div
           role="dialog"
           aria-label="Notifications"
-          className="fixed inset-0 md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:w-96 md:max-h-[28rem] flex flex-col bg-white dark:bg-gray-800 md:rounded-2xl shadow-2xl md:border border-gray-200 dark:border-gray-700 z-50 overflow-hidden safe-top md:pt-0 animate-fade-in"
+          className="fixed inset-0 md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:w-96 md:max-h-[28rem] flex flex-col bg-card md:rounded-2xl shadow-2xl md:border border-border z-50 overflow-hidden safe-top md:pt-0 animate-fade-in"
         >
-          <div className="shrink-0 px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-            <h3 className="font-semibold text-gray-900 dark:text-white text-lg">Notifications</h3>
+          <div className="shrink-0 px-4 py-3 border-b border-border flex justify-between items-center">
+            <h3 className="font-semibold text-foreground text-lg">Notifications</h3>
             <div className="flex items-center gap-1">
               {unreadCount > 0 && (
                 <button
@@ -123,7 +123,7 @@ const NotificationCenter = () => {
                     <li key={notification.id}>
                       <button
                         onClick={() => !notification.is_read && markAsRead(notification.id)}
-                        className={`w-full text-left p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                        className={`w-full text-left p-4 border-b border-border hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
                           !notification.is_read ? "bg-primary-50/60 dark:bg-primary-900/10" : ""
                         }`}
                       >
@@ -132,7 +132,7 @@ const NotificationCenter = () => {
                             <Icon className="h-5 w-5" aria-hidden="true" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 dark:text-white leading-snug">
+                            <p className="text-sm font-medium text-foreground leading-snug">
                               {notification.message}
                             </p>
                             <p className="flex items-center mt-1.5 text-xs text-muted">

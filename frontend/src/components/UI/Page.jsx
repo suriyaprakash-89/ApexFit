@@ -2,23 +2,24 @@
 import React, { useEffect } from "react";
 
 /** Consistent page shell: same width, padding and header on every screen. */
-const Page = ({ title, subtitle, icon: Icon, actions, children, documentTitle }) => {
+const Page = ({ title, subtitle, eyebrow, icon: Icon, actions, children, documentTitle }) => {
   useEffect(() => {
     document.title = `${documentTitle || title} · ApeXfit`;
   }, [documentTitle, title]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8">
-      <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
+    <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+      <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           {Icon && (
-            <div className="shrink-0 w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center">
-              <Icon className="w-5 h-5 text-primary-600 dark:text-primary-400" aria-hidden="true" />
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+              <Icon className="h-5 w-5 text-primary" aria-hidden="true" />
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">{title}</h1>
-            {subtitle && <p className="text-sm text-muted mt-0.5">{subtitle}</p>}
+            {eyebrow && <p className="eyebrow mb-1">{eyebrow}</p>}
+            <h1 className="text-balance text-2xl font-bold leading-tight text-foreground sm:text-4xl">{title}</h1>
+            {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
           </div>
         </div>
         {actions && <div className="flex flex-wrap gap-2 sm:justify-end">{actions}</div>}

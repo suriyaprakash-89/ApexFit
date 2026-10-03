@@ -1,7 +1,7 @@
 // frontend/src/pages/Challenges.jsx
 import React, { useEffect, useState } from "react";
 import { Trophy, Award, Star, Sparkles, Check, CalendarDays } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { useChallengeStore } from "../store/challengeStore";
 import { useAuthStore } from "../store/authStore";
 import Page from "../components/UI/Page";
@@ -114,7 +114,7 @@ const Challenges = () => {
                     <li key={uc.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <h3 className="font-semibold text-gray-900 dark:text-white">{uc.challenge.name}</h3>
+                          <h3 className="font-semibold text-foreground">{uc.challenge.name}</h3>
                           <p className="text-sm text-muted mt-0.5">{uc.challenge.description}</p>
                         </div>
                         <span
@@ -134,7 +134,7 @@ const Challenges = () => {
                               {Number(uc.progress).toLocaleString(undefined, { maximumFractionDigits: 1 })} /{" "}
                               {Number(uc.target).toLocaleString()} {uc.unit}
                             </span>
-                            <span className="font-semibold text-gray-900 dark:text-white">{uc.percent}%</span>
+                            <span className="font-semibold text-foreground">{uc.percent}%</span>
                           </div>
                           <div
                             className="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-600"
@@ -190,7 +190,7 @@ const Challenges = () => {
                             </span>
                           )}
                         </div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">{challenge.name}</h3>
+                        <h3 className="font-semibold text-foreground">{challenge.name}</h3>
                         <p className="text-sm text-muted mt-1 flex-1">{challenge.description}</p>
                         <div className="flex justify-between items-center mt-3 text-xs">
                           <span className="font-bold text-yellow-800 bg-yellow-100 dark:text-yellow-200 dark:bg-yellow-900/40 px-2.5 py-1 rounded-full">
@@ -257,7 +257,7 @@ const Challenges = () => {
                       >
                         {entry.rank}
                       </span>
-                      <span className="font-medium text-gray-900 dark:text-white truncate">
+                      <span className="font-medium text-foreground truncate">
                         {entry.name}
                         {entry.isMe && <span className="text-muted font-normal"> (you)</span>}
                       </span>
@@ -271,7 +271,7 @@ const Challenges = () => {
             )}
             {leaderboard.me && !leaderboard.top.some((e) => e.isMe) && (
               <p className="mt-3 flex items-center justify-between p-3 rounded-xl bg-primary-50 dark:bg-primary-900/30 text-sm">
-                <span className="font-medium text-gray-900 dark:text-white">
+                <span className="font-medium text-foreground">
                   You're #{leaderboard.me.rank}
                 </span>
                 <span className="font-bold text-purple-600 dark:text-purple-400">

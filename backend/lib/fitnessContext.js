@@ -29,10 +29,45 @@ const round = (n, digits = 1) =>
 const avg = (values) =>
   values.length ? values.reduce((s, v) => s + v, 0) / values.length : null;
 
+/** Compact strength-training summary: sessions, sets and the heaviest set per exercise. */
+function summariseStrength(workouts) {
+  if (!workouts.length) return null;
+  const best = {};
+  let totalSets = 0;
+  workouts.forEach((w) =>
+    (w.workout_sets || []).forEach((s) => {
+      totalSets += 1;
+      const weight = Number(s.weight_kg);
+      if (!best[s.exercise] || weight > best[s.exercise].weightKg) best[s.exercise] = { exercise: s.exercise, weightKg: weight, reps: s.reps };
+    })
+  );
+  return {
+    sessions: workouts.length,
+    totalSets,
+    lastSession: { date: workouts[0].date, name: workouts[0].name },
+    topLifts: Object.values(best).sort((a, b) => b.weightKg - a.weightKg).slice(0, 5),
+  };
+}
+
+/** Latest body measurements and the change over the logged window. */
+function summariseBody(rows) {
+  const weights = rows.filter((r) => r.weight_kg != null);
+  if (!weights.length) return null;
+  const latest = weights[0];
+  const oldest = weights[weights.length - 1];
+  return {
+    latestWeightKg: Number(latest.weight_kg),
+    latestDate: latest.date,
+    ...(weights.length > 1 ? { weightChangeKg: round(Number(latest.weight_kg) - Number(oldest.weight_kg)), sinceDate: oldest.date } : {}),
+    ...(latest.body_fat_pct != null ? { bodyFatPct: Number(latest.body_fat_pct) } : {}),
+    ...(latest.waist_cm != null ? { waistCm: Number(latest.waist_cm) } : {}),
+  };
+}
+
 async function buildFitnessContext(userId, today, days = 7) {
   const start = addDays(today, -(days - 1));
 
-  const [profileRes, stepsRes, sleepRes, waterRes, activitiesRes, goalsRes] =
+  const [profileRes, stepsRes, sleepRes, waterRes, activitiesRes, goalsRes, workoutsRes, bodyRes] =
     await Promise.all([
       supabase.from("profiles").select("name, age, weight, height").eq("id", userId).maybeSingle(),
       supabase.from("steps").select("date, steps").eq("user_id", userId).gte("date", start).lte("date", today),
@@ -47,6 +82,21 @@ async function buildFitnessContext(userId, today, days = 7) {
         .order("date", { ascending: false })
         .limit(100),
       supabase.from("goals").select("goal_type, target_value, current_value, deadline").eq("user_id", userId).eq("achieved", false),
+      // Optional data (migration 0007): a missing table just yields an error, which we treat as "no data"
+      supabase
+        .from("workouts")
+        .select("date, name, duration_min, workout_sets(exercise, reps, weight_kg)")
+        .eq("user_id", userId)
+        .gte("date", start)
+        .lte("date", today)
+        .order("date", { ascending: false })
+        .limit(20),
+      supabase
+        .from("body_metrics")
+        .select("date, weight_kg, body_fat_pct, waist_cm")
+        .eq("user_id", userId)
+        .order("date", { ascending: false })
+        .limit(30),
     ]);
 
   const steps = stepsRes.data || [];
@@ -55,6 +105,9 @@ async function buildFitnessContext(userId, today, days = 7) {
   const activities = activitiesRes.data || [];
   const goalsList = goalsRes.data || [];
   const profile = profileRes.data || {};
+
+  const strength = summariseStrength(workoutsRes.error ? [] : workoutsRes.data || []);
+  const body = summariseBody(bodyRes.error ? [] : bodyRes.data || []);
 
   const goals = { ...DEFAULT_GOALS };
   goalsList.forEach((g) => {
@@ -109,6 +162,8 @@ async function buildFitnessContext(userId, today, days = 7) {
       activityTypes,
       daysWithAnyLog: loggedDates.size,
     },
+    ...(strength ? { strength } : {}),
+    ...(body ? { body } : {}),
     activeGoals: goalsList.map((g) => ({
       type: g.goal_type,
       target: Number(g.target_value),

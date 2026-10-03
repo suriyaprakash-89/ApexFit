@@ -3,7 +3,7 @@
 // temporary recovery session, which lets us call updateUser({ password }).
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { useAuthStore } from "../store/authStore";
 import { AuthLayout, PasswordInput } from "../components/Auth/AuthLayout";
 

@@ -20,8 +20,8 @@ const {
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // Larger model for conversation quality, small fast model for structured JSON tasks.
-const CHAT_MODEL = process.env.GROQ_CHAT_MODEL || "llama-3.3-70b-versatile";
-const FAST_MODEL = process.env.GROQ_FAST_MODEL || "llama-3.1-8b-instant";
+const CHAT_MODEL = process.env.GROQ_CHAT_MODEL || "openai/gpt-oss-120b";
+const FAST_MODEL = process.env.GROQ_FAST_MODEL || "openai/gpt-oss-20b";
 
 const MAX_MESSAGE_CHARS = 2000;
 const MAX_HISTORY_MESSAGES = 12; // last 6 turns sent to the model
@@ -150,7 +150,8 @@ router.post("/ask", authenticateToken, aiChatLimiter, aiChatDailyLimiter, async 
           { role: "user", content: message },
         ],
         temperature: 0.6,
-        max_tokens: 1024,
+        max_tokens: 2048,
+        reasoning_effort: "low",
         stream: true,
       },
       { signal: abortController.signal }
@@ -268,7 +269,8 @@ Respond with only a JSON object with keys: name, description, type, duration_day
         model: FAST_MODEL,
         messages: [{ role: "user", content: prompt }],
         temperature: 0.8,
-        max_tokens: 300,
+        max_tokens: 1000,
+        reasoning_effort: "low",
         response_format: { type: "json_object" },
       });
       try {
@@ -396,7 +398,8 @@ Return a JSON object with:
           },
         ],
         temperature: 0.5,
-        max_tokens: 700,
+        max_tokens: 1500,
+        reasoning_effort: "low",
         response_format: { type: "json_object" },
       });
       ai = JSON.parse(completion.choices?.[0]?.message?.content || "{}");

@@ -1,7 +1,7 @@
 // frontend/src/components/Dashboard/GoalModal.jsx
 import React, { useState, useEffect } from "react";
 import { useActivityStore } from "../../store/activityStore";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import Modal from "../UI/Modal";
 import { GOAL_TYPES, GLASS_TO_LITER, percentOf } from "../../utils/goals";
 
@@ -45,7 +45,7 @@ const GoalModal = ({ isOpen, onClose, goalType, currentGoal, currentValue = 0 })
           {config.icon}
         </span>
         <div className="text-sm">
-          <p className="font-medium text-gray-900 dark:text-white">
+          <p className="font-medium text-foreground">
             Today: {Number(currentValue).toLocaleString()} {config.unit}
             {goalType === "water" && <span className="text-muted"> (≈ {toLiters(currentValue)} L)</span>}
           </p>

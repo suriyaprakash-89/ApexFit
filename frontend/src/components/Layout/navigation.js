@@ -2,6 +2,8 @@
 import {
   Home,
   Activity,
+  Dumbbell,
+  Scale,
   Footprints,
   Moon,
   Target,
@@ -20,9 +22,11 @@ export const NAV_SECTIONS = [
     title: "Track",
     items: [
       { to: "/dashboard", label: "Home", icon: Home, end: true },
+      { to: "/workouts", label: "Workouts", icon: Dumbbell },
       { to: "/activities", label: "Activities", icon: Activity },
       { to: "/steps", label: "Steps", icon: Footprints },
       { to: "/sleep", label: "Sleep", icon: Moon },
+      { to: "/body", label: "Body", icon: Scale },
       { to: "/goals", label: "Goals", icon: Target },
     ],
   },
@@ -47,7 +51,7 @@ export const ADMIN_ITEM = { to: "/admin", label: "Admin", icon: Shield };
 // Mobile bottom bar: the 4 most-used destinations + "More"
 export const BOTTOM_TABS = [
   { to: "/dashboard", label: "Home", icon: Home, end: true },
-  { to: "/activities", label: "Log", icon: Activity },
+  { to: "/workouts", label: "Train", icon: Dumbbell },
   { to: "/coach", label: "Coach", icon: Brain },
   { to: "/challenges", label: "Challenges", icon: Trophy },
 ];

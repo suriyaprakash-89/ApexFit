@@ -7,6 +7,7 @@ import autoprefixer from "autoprefixer";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * Lists every built file for the service worker to precache (so all pages work
@@ -39,7 +40,10 @@ const precacheManifest = () => {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), basicSsl(), precacheManifest()],
+  // HTTPS is needed for camera access over the LAN; `npm run dev:http` skips the self-signed cert
+  // (useful for automated browsers that reject it).
+  plugins: [react(), process.env.npm_lifecycle_event === "dev:http" ? null : basicSsl(), precacheManifest()],
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   server: {
     host: true, // This allows access from your local network IP
   },

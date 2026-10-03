@@ -20,6 +20,8 @@ const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Overview = lazy(() => import("./pages/Overview"));
 const Activities = lazy(() => import("./pages/Activities"));
+const Workouts = lazy(() => import("./pages/Workouts"));
+const Body = lazy(() => import("./pages/Body"));
 const Steps = lazy(() => import("./pages/Steps"));
 const Sleep = lazy(() => import("./pages/Sleep"));
 const Goals = lazy(() => import("./pages/Goals"));
@@ -63,6 +65,8 @@ function App() {
           {/* Marketing: landing for visitors, signed-in users go straight to the app */}
           <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
           <Route path="/privacy" element={<Privacy />} />
+          {/* Dev-only: view the marketing page while signed in (QA of motion / reduced-motion) */}
+          {import.meta.env.DEV && <Route path="/preview/landing" element={<Landing />} />}
 
           {/* Signed-out pages */}
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
@@ -75,6 +79,8 @@ function App() {
           <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
             <Route path="/dashboard" element={<Overview />} />
             <Route path="/activities" element={<Activities />} />
+            <Route path="/workouts" element={<Workouts />} />
+            <Route path="/body" element={<Body />} />
             <Route path="/steps" element={<Steps />} />
             <Route path="/sleep" element={<Sleep />} />
             <Route path="/goals" element={<Goals />} />

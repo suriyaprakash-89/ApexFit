@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Save, Bell, Moon, Sun, Download, Trash2, Shield, Monitor, Settings as SettingsIcon, Palette } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { supabase } from "../lib/supabase";
 import { apiJson } from "../lib/api";
 import { useAuthStore } from "../store/authStore";
@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS = {
 const Switch = ({ id, label, description, checked, onChange, disabled }) => (
   <div className="flex items-center justify-between gap-4 py-3">
     <div>
-      <p id={`${id}-label`} className={`font-medium ${disabled ? "text-gray-400 dark:text-gray-500" : "text-gray-900 dark:text-white"}`}>
+      <p id={`${id}-label`} className={`font-medium ${disabled ? "text-gray-400 dark:text-gray-500" : "text-foreground"}`}>
         {label}
       </p>
       <p id={`${id}-desc`} className="text-sm text-muted">
@@ -117,10 +117,15 @@ const Settings = () => {
   const exportData = async () => {
     setExporting(true);
     try {
-      const tables = ["activities", "steps", "sleep", "water", "goals"];
+      const tables = ["activities", "steps", "sleep", "water", "goals", "workouts", "workout_sets", "body_metrics"];
+      // The last three come from a newer migration; a missing table exports as empty instead of failing.
+      const optional = new Set(["workouts", "workout_sets", "body_metrics"]);
       const results = await Promise.all(tables.map((t) => supabase.from(t).select("*").eq("user_id", user.id)));
-      const failed = results.find((r) => r.error);
+      const failed = results.find((r, i) => r.error && !optional.has(tables[i]));
       if (failed) throw failed.error;
+      results.forEach((r, i) => {
+        if (r.error) r.data = [];
+      });
 
       const allData = Object.fromEntries(tables.map((t, i) => [t, results[i].data]));
       allData.exported_at = new Date().toISOString();
@@ -242,7 +247,7 @@ const Settings = () => {
                   onClick={() => changeTheme(value)}
                   className={`flex flex-col items-center gap-1 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     theme === value
-                      ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm"
+                      ? "bg-white dark:bg-gray-600 text-foreground shadow-sm"
                       : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
                   }`}
                 >

@@ -33,7 +33,7 @@ class ErrorBoundary extends React.Component {
         <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
           <AlertTriangle className="w-7 h-7 text-amber-600 dark:text-amber-400" aria-hidden="true" />
         </div>
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+        <h1 className="text-xl font-semibold text-foreground">
           {chunkFailed ? "This page couldn't be loaded" : "Something went wrong"}
         </h1>
         <p className="mt-2 text-sm text-muted">

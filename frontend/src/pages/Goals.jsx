@@ -3,7 +3,7 @@
 // (today's steps/sleep/water/calories, workout days in the last 7 days, profile weight).
 import React, { useState, useEffect } from "react";
 import { Plus, Target, Calendar, Trash2, Check } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
 import { useActivityStore } from "../store/activityStore";
@@ -86,7 +86,7 @@ const GoalCard = ({ goal, onDelete, onChanged }) => {
           <span className="text-2xl" aria-hidden="true">
             {type.icon}
           </span>
-          <h3 className="font-semibold text-gray-900 dark:text-white">{type.label}</h3>
+          <h3 className="font-semibold text-foreground">{type.label}</h3>
         </div>
         <div className="flex items-center gap-1">
           {goal.done && (
@@ -112,7 +112,7 @@ const GoalCard = ({ goal, onDelete, onChanged }) => {
             "Add your current weight to track this goal."
           ) : (
             <>
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">{fmt(goal.current_value)} kg</span>
+              <span className="text-2xl font-bold text-foreground">{fmt(goal.current_value)} kg</span>
               <span className="text-muted"> → target {fmt(goal.target_value)} kg</span>
               {!goal.done && <span className="block text-muted mt-1">{fmt(remaining)} kg to go</span>}
             </>
@@ -122,7 +122,7 @@ const GoalCard = ({ goal, onDelete, onChanged }) => {
         <>
           <div className="flex justify-between text-sm mb-1.5">
             <span className="text-muted capitalize">{goal.period}</span>
-            <span className="font-medium text-gray-900 dark:text-white">
+            <span className="font-medium text-foreground">
               {fmt(goal.current_value)} / {fmt(goal.target_value)} {type.unit}
             </span>
           </div>

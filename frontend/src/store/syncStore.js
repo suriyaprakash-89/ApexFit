@@ -2,7 +2,7 @@
 // Offline logging: writes made without a connection are kept on the device and
 // replayed in order when the connection comes back.
 import { create } from "zustand";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { supabase } from "../lib/supabase";
 import { scheduleEngagementCheck } from "../lib/engagement";
 

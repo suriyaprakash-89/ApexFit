@@ -1,14 +1,24 @@
 // frontend/src/components/Layout/AppShell.jsx
-import React, { Suspense, useEffect, useRef, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Sun, Moon, LogOut, MoreHorizontal, ChevronDown, User, Settings, WifiOff, RefreshCw } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { useAuthStore } from "../../store/authStore";
 import { useActivityStore } from "../../store/activityStore";
+import { useTrainingStore } from "../../store/trainingStore";
 import { useNotificationStore } from "../../store/notificationStore";
 import { useTheme } from "../../contexts/ThemeContext";
 import NotificationCenter from "../Notifications/NotificationCenter";
-import Modal from "../UI/Modal";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/shadcn/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/shadcn/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { PageSkeleton } from "../UI/Skeleton";
 import ErrorBoundary from "../UI/ErrorBoundary";
 import { useSyncStore } from "../../store/syncStore";
@@ -24,10 +34,10 @@ import {
 
 const Logo = ({ compact = false }) => (
   <span className="flex items-center gap-2.5">
-    <img src="/logo.png" alt="" className="w-9 h-9 rounded-full shadow-sm" />
+    <img src="/logo.png" alt="" className="h-9 w-9 rounded-full ring-1 ring-border" />
     {!compact && (
-      <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-        Ape<span className="text-primary-600 dark:text-primary-400">X</span>fit
+      <span className="font-display text-xl font-extrabold tracking-tight text-foreground">
+        Ape<span className="text-primary">X</span>fit
       </span>
     )}
   </span>
@@ -52,7 +62,7 @@ const Avatar = ({ user, size = "w-9 h-9" }) => {
 
 const InitialAvatar = ({ user, size }) => (
   <span
-    className={`${size} shrink-0 rounded-full bg-gradient-to-br from-primary-600 to-teal-500 flex items-center justify-center text-white font-semibold text-sm`}
+    className={`${size} shrink-0 rounded-full bg-primary/15 text-primary ring-1 ring-primary/30 flex items-center justify-center font-semibold text-sm`}
     aria-hidden="true"
   >
     {(user?.user_metadata?.name || user?.email || "U").charAt(0).toUpperCase()}
@@ -60,11 +70,12 @@ const InitialAvatar = ({ user, size }) => (
 );
 
 const sidebarLinkClass = ({ isActive }) =>
-  `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+  cn(
+    "group relative flex min-h-[44px] items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
     isActive
-      ? "bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
-      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
-  }`;
+      ? "bg-primary/10 text-foreground before:absolute before:-left-3 before:top-2.5 before:h-6 before:w-1 before:rounded-r-full before:bg-primary"
+      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+  );
 
 const useSignOut = () => {
   const { signOut } = useAuthStore();
@@ -85,8 +96,8 @@ const Sidebar = ({ user }) => {
   const accountItems = isAdminUser(user) ? [...ACCOUNT_ITEMS, ADMIN_ITEM] : ACCOUNT_ITEMS;
 
   return (
-    <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-64 flex-col border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-      <div className="h-16 flex items-center px-5 border-b border-gray-200 dark:border-gray-800">
+    <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-64 flex-col border-r border-border bg-background">
+      <div className="h-16 flex items-center px-5 border-b border-border">
         <NavLink to="/dashboard" aria-label="ApeXfit home">
           <Logo />
         </NavLink>
@@ -94,14 +105,14 @@ const Sidebar = ({ user }) => {
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6" aria-label="Main">
         {NAV_SECTIONS.map((section) => (
           <div key={section.title}>
-            <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            <p className="eyebrow px-3 mb-2">
               {section.title}
             </p>
             <ul className="space-y-1">
               {section.items.map(({ to, label, icon: Icon, end }) => (
                 <li key={to}>
                   <NavLink to={to} end={end} className={sidebarLinkClass}>
-                    <Icon className="w-5 h-5" aria-hidden="true" />
+                    <Icon className="w-[18px] h-[18px]" aria-hidden="true" />
                     {label}
                   </NavLink>
                 </li>
@@ -110,7 +121,7 @@ const Sidebar = ({ user }) => {
           </div>
         ))}
         <div>
-          <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          <p className="eyebrow px-3 mb-2">
             Account
           </p>
           <ul className="space-y-1">
@@ -125,11 +136,11 @@ const Sidebar = ({ user }) => {
           </ul>
         </div>
       </nav>
-      <div className="p-3 border-t border-gray-200 dark:border-gray-800">
+      <div className="p-3 border-t border-border">
         <div className="flex items-center gap-3 px-2 py-2">
           <Avatar user={user} />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+            <p className="text-sm font-medium text-foreground truncate">
               {user?.user_metadata?.name || "Athlete"}
             </p>
             <p className="text-xs text-muted truncate">{user?.email}</p>
@@ -145,76 +156,36 @@ const Sidebar = ({ user }) => {
 
 /* --------------------------------- Top bar --------------------------------- */
 const ProfileMenu = ({ user }) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
   const navigate = useNavigate();
   const handleSignOut = useSignOut();
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointer = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
-    const onKey = (e) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const items = [
-    { label: "Profile", icon: User, onClick: () => navigate("/profile") },
-    { label: "Settings", icon: Settings, onClick: () => navigate("/settings") },
-  ];
-
   return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 p-1 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800"
-        aria-haspopup="menu"
-        aria-expanded={open}
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="flex min-h-[44px] items-center gap-1.5 rounded-xl p-1 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="Account menu"
       >
         <Avatar user={user} />
-        <ChevronDown className="w-4 h-4 text-gray-500" aria-hidden="true" />
-      </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 mt-2 w-56 rounded-xl bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50 animate-fade-in"
-        >
-          <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700">
-            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-              {user?.user_metadata?.name || user?.email}
-            </p>
-            <p className="text-xs text-muted truncate">{user?.email}</p>
-          </div>
-          {items.map(({ label, icon: Icon, onClick }) => (
-            <button
-              key={label}
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                onClick();
-              }}
-              className="flex items-center w-full gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              <Icon className="w-4 h-4" aria-hidden="true" />
-              {label}
-            </button>
-          ))}
-          <button
-            role="menuitem"
-            onClick={handleSignOut}
-            className="flex items-center w-full gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-          >
-            <LogOut className="w-4 h-4" aria-hidden="true" />
-            Sign out
-          </button>
-        </div>
-      )}
-    </div>
+        <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel className="font-normal">
+          <p className="truncate text-sm font-medium text-foreground">{user?.user_metadata?.name || user?.email}</p>
+          <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => navigate("/profile")}>
+          <User aria-hidden="true" /> Profile
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => navigate("/settings")}>
+          <Settings aria-hidden="true" /> Settings
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={handleSignOut} className="text-destructive focus:text-destructive">
+          <LogOut aria-hidden="true" /> Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 };
 
@@ -233,10 +204,8 @@ const ThemeToggle = () => {
 };
 
 const TopBar = ({ user }) => (
-  // Solid background on purpose: backdrop-filter would trap the full-screen
-  // mobile notification panel (position: fixed) inside the header.
   // z-50 keeps the header's popovers (notifications panel) above the mobile bottom bar (z-40).
-  <header className="sticky top-0 z-50 h-16 safe-top box-content bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+  <header className="sticky top-0 z-50 h-16 safe-top box-content bg-background/85 backdrop-blur-xl border-b border-border">
     <div className="h-16 px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
       <NavLink to="/dashboard" className="lg:hidden" aria-label="ApeXfit home">
         <Logo />
@@ -265,52 +234,55 @@ const MoreSheet = ({ open, onClose, user }) => {
   ];
 
   return (
-    <Modal isOpen={open} onClose={onClose} title="More">
-      <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50">
-        <Avatar user={user} size="w-10 h-10" />
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-            {user?.user_metadata?.name || "Athlete"}
-          </p>
-          <p className="text-xs text-muted truncate">{user?.email}</p>
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="bottom">
+        <SheetHeader>
+          <SheetTitle>More</SheetTitle>
+          <SheetDescription className="sr-only">Other pages and account actions</SheetDescription>
+        </SheetHeader>
+        <div className="flex items-center gap-3 rounded-xl bg-muted p-3">
+          <Avatar user={user} size="w-10 h-10" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-foreground">{user?.user_metadata?.name || "Athlete"}</p>
+            <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+          </div>
         </div>
-      </div>
-      <nav className="grid grid-cols-3 gap-2" aria-label="More pages">
-        {extra.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            onClick={onClose}
-            className={({ isActive }) =>
-              `flex flex-col items-center justify-center gap-1.5 min-h-[76px] rounded-xl text-xs font-medium ${
-                isActive
-                  ? "bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
-                  : "bg-gray-50 text-gray-700 dark:bg-gray-700/50 dark:text-gray-200"
-              }`
-            }
+        <nav className="grid grid-cols-3 gap-2" aria-label="More pages">
+          {extra.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              onClick={onClose}
+              className={({ isActive }) =>
+                cn(
+                  "flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-xl border text-xs font-medium transition-colors",
+                  isActive ? "border-primary/40 bg-primary/10 text-foreground" : "border-border bg-card text-muted-foreground active:bg-accent"
+                )
+              }
+            >
+              <Icon className="h-6 w-6" aria-hidden="true" />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={toggleTheme} className="btn-soft">
+            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {isDark ? "Light mode" : "Dark mode"}
+          </button>
+          <button
+            onClick={() => {
+              onClose();
+              handleSignOut();
+            }}
+            className="btn bg-destructive/10 text-destructive hover:bg-destructive/20"
           >
-            <Icon className="w-6 h-6" aria-hidden="true" />
-            {label}
-          </NavLink>
-        ))}
-      </nav>
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <button onClick={toggleTheme} className="btn-soft">
-          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          {isDark ? "Light mode" : "Dark mode"}
-        </button>
-        <button
-          onClick={() => {
-            onClose();
-            handleSignOut();
-          }}
-          className="btn bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30"
-        >
-          <LogOut className="w-4 h-4" />
-          Sign out
-        </button>
-      </div>
-    </Modal>
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 };
 
@@ -322,13 +294,13 @@ const BottomNav = ({ user }) => {
 
   const tabClass = (active) =>
     `flex-1 flex flex-col items-center justify-center gap-0.5 min-h-[56px] text-[11px] font-medium transition-colors ${
-      active ? "text-primary-600 dark:text-primary-400" : "text-gray-500 dark:text-gray-400"
+      active ? "text-primary" : "text-muted-foreground"
     }`;
 
   return (
     <>
       <nav
-        className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-t border-gray-200 dark:border-gray-800 safe-bottom"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-background/90 backdrop-blur-xl border-t border-border safe-bottom"
         aria-label="Primary"
       >
         <div className="flex max-w-lg mx-auto">
@@ -370,7 +342,7 @@ const OfflineBanner = () => {
       role="status"
       className={`flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium ${
         online
-          ? "bg-primary-50 text-primary-800 dark:bg-primary-900/30 dark:text-primary-200"
+          ? "bg-primary/10 text-foreground"
           : "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100"
       }`}
     >
@@ -421,6 +393,7 @@ const AppShell = () => {
       useNotificationStore.getState().stopRealtime();
       useActivityStore.getState().stopRealtime();
       useActivityStore.getState().reset();
+      useTrainingStore.getState().reset();
     };
   }, [userId]);
 
@@ -460,7 +433,7 @@ const AppShell = () => {
   }, [pathname]);
 
   return (
-    <div className="min-h-dvh bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-dvh bg-background">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] btn-primary"

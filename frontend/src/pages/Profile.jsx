@@ -1,7 +1,7 @@
 // frontend/src/pages/Profile.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { User, HeartPulse } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
 import Page from "../components/UI/Page";
@@ -154,7 +154,7 @@ const Profile = () => {
           </h2>
           {bmi ? (
             <>
-              <p className="text-4xl font-bold text-gray-900 dark:text-white">{bmi.toFixed(1)}</p>
+              <p className="text-4xl font-bold text-foreground">{bmi.toFixed(1)}</p>
               <p className={`mt-1 font-medium ${category.color}`}>{category.label}</p>
               <p className="mt-4 text-sm text-muted">
                 BMI is a rough screening number that doesn't account for muscle mass. Use it as one signal among

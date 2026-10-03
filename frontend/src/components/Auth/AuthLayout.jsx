@@ -1,6 +1,47 @@
 // frontend/src/components/Auth/AuthLayout.jsx
 import React, { useEffect, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Check, Eye, EyeOff } from "lucide-react";
+
+const HIGHLIGHTS = ["Workouts, steps, sleep and water in one place", "An AI coach that reads your real week", "Goals, streaks and challenges that keep you going"];
+
+const BrandPanel = () => (
+  <aside className="dark relative hidden overflow-hidden bg-background text-foreground lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16" aria-hidden="true">
+    <div className="pointer-events-none absolute -left-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-primary/20 blur-[120px]" />
+    <div className="pointer-events-none absolute -bottom-40 right-0 h-[26rem] w-[26rem] rounded-full bg-pulse-500/15 blur-[120px]" />
+    <div
+      className="pointer-events-none absolute inset-0 opacity-30"
+      style={{
+        backgroundImage: "linear-gradient(hsl(var(--border)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border)) 1px, transparent 1px)",
+        backgroundSize: "56px 56px",
+        maskImage: "radial-gradient(70% 60% at 30% 30%, black, transparent 80%)",
+        WebkitMaskImage: "radial-gradient(70% 60% at 30% 30%, black, transparent 80%)",
+      }}
+    />
+    <Link to="/" className="relative flex items-center gap-2.5">
+      <img src="/logo.png" alt="" className="h-10 w-10 rounded-full ring-1 ring-white/15" />
+      <span className="font-display text-2xl font-extrabold tracking-tight">
+        Ape<span className="text-primary">X</span>fit
+      </span>
+    </Link>
+    <div className="relative">
+      <h2 className="text-[clamp(2.5rem,4.2vw,4.25rem)] font-black uppercase leading-[0.92] tracking-[-0.02em] [font-stretch:80%]">
+        Train with
+        <br />
+        <span className="text-primary">intent.</span>
+      </h2>
+      <ul className="mt-8 space-y-3">
+        {HIGHLIGHTS.map((t) => (
+          <li key={t} className="flex items-center gap-3 text-muted-foreground">
+            <Check className="h-4 w-4 shrink-0 text-primary" />
+            {t}
+          </li>
+        ))}
+      </ul>
+    </div>
+    <p className="relative text-xs text-muted-foreground">Private by design. Export or delete your data anytime.</p>
+  </aside>
+);
 
 export const AuthLayout = ({ title, subtitle, children, footer }) => {
   useEffect(() => {
@@ -8,21 +49,24 @@ export const AuthLayout = ({ title, subtitle, children, footer }) => {
   }, [title]);
 
   return (
-    <div className="min-h-dvh flex items-center justify-center px-4 py-10 bg-gradient-to-br from-primary-50 via-gray-50 to-teal-50 dark:from-gray-900 dark:via-gray-900 dark:to-primary-950">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <img src="/logo.png" alt="" className="w-16 h-16 mx-auto rounded-full shadow-md" />
-          <p className="mt-3 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-            Ape<span className="text-primary-600 dark:text-primary-400">X</span>fit
-          </p>
+    <div className="grid min-h-dvh bg-background lg:grid-cols-2">
+      <BrandPanel />
+      <main className="flex items-center justify-center px-4 py-10 sm:px-8">
+        <div className="w-full max-w-md">
+          <Link to="/" className="mb-8 flex items-center justify-center gap-2.5 lg:hidden" aria-label="ApeXfit home">
+            <img src="/logo.png" alt="" className="h-12 w-12 rounded-full ring-1 ring-border" />
+            <span className="font-display text-2xl font-extrabold tracking-tight text-foreground">
+              Ape<span className="text-primary">X</span>fit
+            </span>
+          </Link>
+          <div className="card !p-6 sm:!p-8">
+            <h1 className="text-2xl font-bold text-foreground sm:text-3xl">{title}</h1>
+            {subtitle && <p className="mt-1.5 text-sm text-muted-foreground">{subtitle}</p>}
+            <div className="mt-6">{children}</div>
+          </div>
+          {footer && <div className="mt-6 text-center text-sm text-muted-foreground">{footer}</div>}
         </div>
-        <div className="card shadow-lg">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
-          <div className="mt-6">{children}</div>
-        </div>
-        {footer && <div className="mt-6 text-center text-sm text-muted">{footer}</div>}
-      </div>
+      </main>
     </div>
   );
 };

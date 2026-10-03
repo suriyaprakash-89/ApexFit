@@ -1,7 +1,7 @@
 // frontend/src/pages/Steps.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { Footprints } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
 import { useActivityStore } from "../store/activityStore";
@@ -185,7 +185,7 @@ const Steps = () => {
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <span className="text-right font-medium text-gray-900 dark:text-white">{day.steps.toLocaleString()}</span>
+                  <span className="text-right font-medium text-foreground">{day.steps.toLocaleString()}</span>
                 </li>
               );
             })}

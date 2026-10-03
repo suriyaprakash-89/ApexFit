@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { AuthLayout, PasswordInput, GoogleIcon } from "../components/Auth/AuthLayout";
 
 const Login = () => {
@@ -94,10 +94,10 @@ const Login = () => {
 
       <div className="relative my-6">
         <div className="absolute inset-0 flex items-center" aria-hidden="true">
-          <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+          <div className="w-full border-t border-border" />
         </div>
         <p className="relative flex justify-center text-sm">
-          <span className="px-3 bg-white dark:bg-gray-800 text-muted">or continue with</span>
+          <span className="px-3 bg-card text-muted">or continue with</span>
         </p>
       </div>
 

@@ -32,7 +32,7 @@ export const SkeletonStatGrid = ({ count = 4 }) => (
 /** Full-page placeholder used while a lazy route chunk loads. */
 export const PageSkeleton = () => (
   <div
-    className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 space-y-6"
+    className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 space-y-6"
     role="status"
     aria-label="Loading"
   >

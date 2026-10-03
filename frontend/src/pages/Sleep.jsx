@@ -1,7 +1,7 @@
 // frontend/src/pages/Sleep.jsx
 import React, { useState, useEffect, useCallback } from "react";
 import { Moon, Star } from "lucide-react";
-import toast from "react-hot-toast";
+import toast from "@/lib/toast";
 import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
 import { useActivityStore } from "../store/activityStore";
@@ -171,7 +171,7 @@ const Sleep = () => {
               return (
                 <li key={entry.date} className="flex flex-wrap items-center justify-between gap-2 py-3">
                   <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    <p className="text-sm font-medium text-foreground">
                       {formatDate(entry.date, { weekday: "short", month: "short", day: "numeric" })}
                     </p>
                     <div className="flex items-center gap-0.5 mt-1" aria-label={`Quality ${entry.quality || 0} out of 5`}>
@@ -187,7 +187,7 @@ const Sleep = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{entry.hours} h</span>
+                    <span className="text-sm font-semibold text-foreground">{entry.hours} h</span>
                     <span
                       className={`px-2.5 py-1 text-xs font-medium rounded-full ${
                         good

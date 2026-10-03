@@ -36,7 +36,7 @@ const RecentActivities = ({ activities }) => {
                 {activityEmoji(activity.type)}
               </span>
               <div className="min-w-0">
-                <p className="font-medium text-gray-900 dark:text-white capitalize truncate">{activity.type}</p>
+                <p className="font-medium text-foreground capitalize truncate">{activity.type}</p>
                 <p className="text-sm text-muted">
                   {activity.duration} min · {isToday(activity.date) ? "Today" : formatDate(activity.date, { weekday: "short", month: "short", day: "numeric" })}
                 </p>
